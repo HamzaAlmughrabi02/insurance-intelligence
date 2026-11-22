@@ -1,0 +1,4 @@
+pypdf
+Pillow
+openpyxl
+argon2-cffi

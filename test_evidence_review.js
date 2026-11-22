@@ -1,0 +1,18 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const elements=new Map();const $=id=>{if(!elements.has(id))elements.set(id,{innerHTML:'',disabled:false,focus(){},scrollIntoView(){}});return elements.get(id)};
+const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ctx=vm.createContext({renderDetail:()=>'',console,$,esc:escape,matchMedia:()=>({matches:true})});
+vm.runInContext(fs.readFileSync(__dirname+'/evidence-review.js','utf8'),ctx);
+const run=code=>vm.runInContext(code,ctx);
+assert.equal(run(`collectFindings({flags:['HOOD_REPAIR_JOD_850_UNCERTAIN','HOOD_REPAIR_JOD_850_UNCERTAIN'],findings:[{message:'hood repair 850 uncertain'}]}).length`),1);
+assert.equal(run(`relatedSources(findingInfo('POLICY_NOT_FOUND'),[{document_id:'1',pages:[{page:1,text:'Policy'}]}]).length`),0);
+assert.equal(run(`relatedSources(findingInfo('HOOD_REPAIR_JOD_850_UNCERTAIN'),[{document_id:'1',pages:[{page:2,text:'Hood panel\\nJOD 850'}]}])[0].page`),2);
+assert(!run(`findingInfo('hood repair uncertain').detail`).includes('850'));
+run(`evidenceReview={documents:[{id:'synthetic',original_name:'policy.pdf'}],evidence:[{document_id:'synthetic',pages:[{page:1,text:'<script>untrusted</script>'}]}],history:[],selected:0,mode:'text',page:0};renderEvidenceWorkspace()`);
+assert($('evidence-reader').innerHTML.includes('&lt;script&gt;'));
+assert(!$('evidence-reader').innerHTML.includes('<script>'));
+run(`selectEvidence(0,'original')`);
+assert($('evidence-reader').innerHTML.includes('?view=1#page=1'));
+assert(!$('docs').innerHTML.includes('تحميل المستند'));
+console.log('Evidence UI: 8 assertions passed (deduplication, honest provenance, source page, no invented amount, escaping, inline mode, text links).');
+fs.writeFileSync(__dirname+'/evidence-test-results.json',JSON.stringify({status:'PASS',assertions:8,real_browser_authenticated:false},null,2));

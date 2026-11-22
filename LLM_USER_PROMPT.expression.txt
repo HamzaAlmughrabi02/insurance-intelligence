@@ -1,0 +1,15 @@
+={{ JSON.stringify({
+  tracking: {
+    job_id: $json.job_id ?? null,
+    claim_id: $json.claim_id ?? null,
+    claim_version: $json.claim_version ?? null
+  },
+  input_scope: "CLAIM_CONTEXT_AND_RULE_OUTPUT_ONLY_NO_ORIGINAL_DOCUMENTS",
+  claim: $json.claim_context ?? {},
+  policy_verification: $json.policy_verification ?? {},
+  rule_engine: {
+    findings: $json.findings ?? [],
+    missing_information: $json.missing_information ?? [],
+    requires_human_review: $json.requires_human_review === true
+  }
+}) }}
