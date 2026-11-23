@@ -17,17 +17,18 @@ LOCK = threading.Lock()
 ENGINES = {}
 MODEL = 'qwen3-vl:2b-instruct'
 MAX_PIXELS = 16_000_000
+DATA=Path(os.environ.get('INSURANCE_READER_DATA_DIR',str(ROOT/'data'))).resolve()
 
 def document(document_id):
     if not isinstance(document_id, str) or not document_id or len(document_id) > 100:
         raise ValueError('Invalid document ID')
-    database = ROOT / 'data/app.sqlite3'
+    database = DATA / 'app.sqlite3'
     with sqlite3.connect(database.as_uri() + '?mode=ro', uri=True) as c:
         row = c.execute('SELECT path FROM documents WHERE id=?', (document_id,)).fetchone()
     if not row:
         raise ValueError('Unknown document')
     path = Path(row[0]).resolve()
-    if path.parent != (ROOT / 'data/uploads').resolve() or not path.is_file():
+    if path.parent != (DATA / 'uploads').resolve() or not path.is_file():
         raise ValueError('Invalid document path')
     if path.stat().st_size > 10 * 1024 * 1024:
         raise ValueError('Document too large')
@@ -37,7 +38,10 @@ def page_image(path, page):
     from PIL import Image, ImageOps
     if type(page) is not int or not 1 <= page <= 100:
         raise ValueError('Invalid page')
-    if path.suffix.lower() == '.pdf':
+    # Uploaded files are stored under extensionless UUIDs. Inspect bytes, not storage names.
+    with path.open('rb') as f:
+        is_pdf = f.read(5) == b'%PDF-'
+    if is_pdf:
         import pypdfium2 as pdfium
         pdf = pdfium.PdfDocument(path)
         try:
@@ -183,4 +187,4 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     print('Document reader: http://127.0.0.1:8767', flush=True)
-    ThreadingHTTPServer(('127.0.0.1', 8767), Handler).serve_forever()
+    ThreadingHTTPServer(('127.0.0.1', int(os.environ.get('INSURANCE_READER_PORT','8767'))), Handler).serve_forever()

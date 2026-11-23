@@ -1,10 +1,13 @@
 """Lightweight integration client; OCR and model dependencies stay in a separate process."""
-import json, re, unicodedata, urllib.request
+import json, re, unicodedata, urllib.request, os
+from urllib.parse import urlsplit
 from datetime import datetime
 
 def request(operation, document_id, page, token, **extra):
     body = dict(document_id=document_id, page=page, **extra)
-    req = urllib.request.Request('http://127.0.0.1:8767/' + operation,
+    url=os.environ.get('INSURANCE_READER_URL','http://127.0.0.1:8767')
+    if urlsplit(url).hostname not in ('127.0.0.1','localhost'):raise ValueError('Reader must be local')
+    req = urllib.request.Request(url+'/' + operation,
         data=json.dumps(body).encode(), headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token})
     with urllib.request.urlopen(req, timeout=180) as response:
         return json.load(response)
@@ -16,6 +19,21 @@ def normalize(text):
 
 def needs_ocr(text):
     return sum(c.isalnum() for c in text) < 30 or '\ufffd' in text
+
+def usable_page(page):
+    return page.get('method') != 'paddleocr' or page.get('confidence', 0) >= .8
+
+def page_has_images(page):
+    def scan(resources,depth=0):
+        if not resources or depth>3:return False
+        resources=resources.get_object();objects=resources.get('/XObject')
+        objects=objects.get_object() if objects else {}
+        for ref in objects.values():
+            obj=ref.get_object()
+            if str(obj.get('/Subtype'))=='/Image' and int(obj.get('/Width',0))*int(obj.get('/Height',0))>100000:return True
+            if str(obj.get('/Subtype'))=='/Form' and scan(obj.get('/Resources'),depth+1):return True
+        return False
+    return scan(page.get('/Resources'))
 
 def parse_date(value):
     value = normalize(value).strip(' :：')
@@ -35,7 +53,7 @@ def candidates(evidence):
         'incident_description': r'(?:Claimant statement|Incident description|وصف\s*الحادث|تفاصيل\s*الحادث)\s*[:：]?\s*([^\n]{5,1000})'}
     for doc in evidence:
         for page in doc.get('pages', []):
-            if page.get('method') == 'paddleocr' and page.get('confidence', 0) < .5:
+            if not usable_page(page):
                 continue
             text = unicodedata.normalize('NFKC', page.get('text', ''))
             for field, pattern in patterns.items():
@@ -51,6 +69,8 @@ def candidates(evidence):
 
 def grounded_proposals(context, page):
     """A model proposal can only fill a claim field when quote and value match extracted evidence."""
+    if not usable_page(page):
+        return []
     text = normalize(page.get('text', ''))
     accepted = []
     for item in context.get('fields', []):

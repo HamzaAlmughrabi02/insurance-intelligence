@@ -1,0 +1,87 @@
+{
+  "name": "INSURANCE — REVIEW SYNCHRONIZATION",
+  "nodes": [
+    {
+      "id": "53ae6dc1-eaf8-4cd7-b56a-f970490f16c9",
+      "name": "Review Event Intake",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "insurance-review-sync",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "e4a5db63-ff9f-4c11-a372-5509569b2641",
+      "name": "Resolve Versioned Review Tasks",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        300,
+        0
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM public.insurance_resolve_review($1::jsonb);",
+        "options": {
+          "queryReplacement": "={{ JSON.stringify($json.body) }}"
+        }
+      }
+    },
+    {
+      "id": "a7cfca71-c724-4329-bbfa-03bd9b249e04",
+      "name": "Acknowledge Review Sync",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        600,
+        0
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}",
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Review Event Intake": {
+      "main": [
+        [
+          {
+            "node": "Resolve Versioned Review Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Versioned Review Tasks": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge Review Sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {},
+  "staticData": null,
+  "meta": {
+    "templateWorkflowId": "55f1e1b8-3189-45f8-a479-1a685fcf9efd"
+  }
+}

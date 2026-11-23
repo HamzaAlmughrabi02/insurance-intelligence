@@ -5,6 +5,8 @@ from datetime import datetime
 import server as base
 import auth_sessions
 import document_reader
+import quality
+import reliability
 from pypdf import PdfReader
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -15,6 +17,7 @@ cfg=json.loads(CONFIG.read_text())
 os.environ.update(cfg)
 os.environ.setdefault('N8N_WEBHOOK_URL','http://127.0.0.1:5678/webhook/insurance-web-intake')
 PORT=int(os.environ.get('PORT','8766'))
+reliability.BASE=base;reliability.CFG=cfg
 base.DATA=Path(os.environ.get('INSURANCE_DATA_DIR',str(ROOT/'data')));base.DB=base.DATA/'app.sqlite3';base.UPLOADS=base.DATA/'uploads'
 
 def init():
@@ -27,6 +30,7 @@ CREATE TABLE IF NOT EXISTS callbacks(job_id TEXT PRIMARY KEY,digest TEXT NOT NUL
 CREATE TABLE IF NOT EXISTS result_history(job_id TEXT PRIMARY KEY,case_id TEXT NOT NULL,version INTEGER NOT NULL,result TEXT NOT NULL,created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS corrections(case_id TEXT PRIMARY KEY,version INTEGER NOT NULL DEFAULT 1,fields TEXT NOT NULL DEFAULT '{}');''')
   c.execute('''CREATE TABLE IF NOT EXISTS document_preparations(case_id TEXT PRIMARY KEY,version INTEGER NOT NULL,fields TEXT NOT NULL,actor TEXT NOT NULL,status TEXT NOT NULL)''')
+ reliability.init()
 
 def extract(doc):
  path=Path(doc['path']).resolve()
@@ -42,14 +46,15 @@ def extract(doc):
     text=p.extract_text() or ''
     page={'page':i+1,'text':text[:20000],'method':'native_pdf'}
     if len(text)>20000:out['uncertainties'].append('TEXT_TRUNCATED')
-    if document_reader.needs_ocr(text):
+    if document_reader.needs_ocr(text) or document_reader.page_has_images(p):
      if ocr_pages>=10:
       out['uncertainties'].append('OCR_PAGE_LIMIT: remaining pages require manual review')
      else:
       ocr_pages+=1
       try:
        result=document_reader.request('ocr',doc['id'],i+1,cfg['N8N_DOCUMENT_TOKEN'],lang='ar')
-       if result.get('text','').strip():page.update(result);out['method']='hybrid_pdf_ocr'
+       if result.get('text','').strip() and (not text.strip() or result.get('confidence',0)>=.8):
+        page.update(result);page['native_text']=text[:20000];out['method']='hybrid_pdf_ocr'
        if result.get('confidence',0)<.8:out['uncertainties'].append('OCR_LOW_CONFIDENCE: page '+str(i+1))
       except Exception:out['uncertainties'].append('OCR_UNAVAILABLE: page '+str(i+1))
     out['pages'].append(page)
@@ -85,27 +90,22 @@ def build(case_id,version,fields):
   docs=[dict(r) for r in c.execute('SELECT * FROM documents WHERE case_id=?',(case_id,))]
  evidence=[extract(d) for d in docs]
  text='\n'.join(p['text'] for e in evidence for p in e['pages'])
- def match(pattern):
-  m=re.search(pattern,text,re.I);return m.group(1).strip() if m else ''
- date=match(r'(?:Incident date|Date of incident)\s*\n(\d{1,2} \w{3} \d{4})')
- try:date=datetime.strptime(date,'%d %b %Y').date().isoformat()
- except ValueError:date=''
- claim={'claim_number':case_id,'policy_number':match(r'Policy number\s*\n([^\n]+)'), 'claim_type':'motor','accident_date':date,'vehicle_plate':match(r'(?:Vehicle registration|Registration)\s*\n([^\n]+)'), 'incident_description':match(r'Claimant statement:\s*([^\n]+)') or case['notes']}
+ claim={'claim_number':case_id,'policy_number':'','claim_type':quality.supported_kind(case['kind']),'accident_date':'','vehicle_plate':'','incident_description':''}
  choices=document_reader.candidates(evidence)
  # A single model request per document, with an overall case budget. Proposals never override corrections.
  vision_budget=3
  for e in evidence:
   if not any(not choices.get(k) for k in ('policy_number','accident_date','vehicle_plate','incident_description')):break
   if vision_budget<=0:break
-  pages=[p for p in e['pages'] if p.get('text','').strip()]
+  pages=[p for p in e['pages'] if p.get('text','').strip() and document_reader.usable_page(p)]
   if not pages:continue
   p=pages[0];vision_budget-=1
   try:
    context=document_reader.request('context',e['document_id'],p['page'],cfg['N8N_DOCUMENT_TOKEN'],text=p['text'])
    accepted=document_reader.grounded_proposals(context,p)
    e['context']={'model':context['model'],'status':'grounded_candidates_only','accepted_fields':accepted}
-   for proposal in accepted:
-    field=proposal.pop('field');proposal['document_id']=e['document_id'];choices.setdefault(field,[]).append(proposal)
+   for source in accepted:
+    proposal=dict(source);field=proposal.pop('field');proposal['document_id']=e['document_id'];choices.setdefault(field,[]).append(proposal)
   except Exception:e['uncertainties'].append('CONTEXT_MODEL_UNAVAILABLE: deterministic extraction retained')
  extraction_sources={}
  extraction_flags=[]
@@ -116,11 +116,14 @@ def build(case_id,version,fields):
   elif options:
    claim[field]=options[0]['value'];extraction_sources[field]=options
  claim.update(fields);claim['claim_number']=case_id
+ repair_items,document_findings=quality.financial_findings(evidence)
  flags=extraction_flags+[u for e in evidence for u in e['uncertainties']]
+ if claim['claim_type']!='motor':flags.append('UNSUPPORTED_CLAIM_TYPE: manual specialist review required')
+ if choices.get('incident_description') and len({document_reader.normalize(o['value']) for o in choices['incident_description']})>1:flags.append('INCIDENT_DESCRIPTIONS_DIFFER: compare narratives in context')
  policies=sorted(set(re.findall(r'\bPOL-[A-Z0-9-]+',text)))
  if len(policies)>1 or (policies and claim['policy_number'] and claim['policy_number'] not in policies):flags.append('CONFLICTING_POLICY_NUMBERS')
  if re.search(r'uncertain|discrepancy|not confirmed',text,re.I):flags.append('DOCUMENT_EVIDENCE_REQUIRES_REVIEW')
- if re.search(r'hood',text,re.I) and re.search(r'850',text):flags.append('HOOD_REPAIR_JOD_850_UNCERTAIN: compare invoice, incident report and inspection')
+ if document_findings:flags.append('REPAIR_ITEM_REQUIRES_VERIFICATION')
  with base.conn() as c:
   for e in evidence:c.execute('INSERT OR REPLACE INTO evidence VALUES(?,?,?)',(e['document_id'],case_id,json.dumps(e)))
  job=f'WEB-{case_id}-v{version}'
@@ -130,9 +133,9 @@ def build(case_id,version,fields):
   elif key=='claim_number':field_sources[key]=[{'source':'application_case_id'}]
   elif key in extraction_sources:field_sources[key]=extraction_sources[key]
   else:field_sources[key]=[{'document_id':e['document_id'],'page':p['page']} for e in evidence for p in e['pages'] if str(value) and str(value) in p['text']]
- return {'schema_version':'1.0','event_id':job,'event_type':'claim.submitted','job_id':job,'claim_id':case_id,'claim_version':version,'correlation_id':job,'occurred_at':base.now(),'claim_data':claim,'web_integration':True,'case_id':case_id,'evidence':evidence,'document_flags':flags,'field_sources':field_sources}
+ return {'schema_version':'1.0','event_id':job,'event_type':'claim.submitted','job_id':job,'claim_id':case_id,'claim_version':version,'correlation_id':job,'occurred_at':base.now(),'claim_data':claim,'web_integration':True,'case_id':case_id,'evidence':evidence,'document_flags':flags,'field_sources':field_sources,'field_quality':quality.field_quality(claim,choices,fields),'document_findings':document_findings,'repair_items':repair_items}
 
-class Handler(auth_sessions.AuthMixin,base.Handler):
+class Handler(reliability.ReliabilityMixin,auth_sessions.AuthMixin,base.Handler):
  def body(self):
   try:
    n=int(self.headers.get('Content-Length','0'))
@@ -171,11 +174,15 @@ class Handler(auth_sessions.AuthMixin,base.Handler):
    try:
     with socket.create_connection(('127.0.0.1',5433),timeout=1):database=True
    except OSError:pass
-   reader=False
+   reader=False;workflow_ready=False
+   try:
+    req=urllib.request.Request('http://127.0.0.1:5678/webhook/insurance-readiness',headers={'Authorization':'Bearer '+cfg['N8N_OUTBOUND_TOKEN']})
+    with urllib.request.urlopen(req,timeout=3) as response:workflow_ready=json.load(response).get('ready') is True
+   except Exception:pass
    try:
     with urllib.request.urlopen('http://127.0.0.1:8767/health',timeout=1) as response:reader=response.status==200
    except Exception:pass
-   return self.reply(200,{'n8n_reachable':n8n,'database_port_reachable':database,'document_reader_reachable':reader,'ready':n8n and database})
+   return self.reply(200,{'n8n_reachable':n8n,'database_port_reachable':database,'document_reader_reachable':reader,'workflow_ready':workflow_ready,'ready':n8n and database and workflow_ready})
   if p.startswith('/api/cases/') and p.rsplit('/',1)[-1] in ('jobs','history'):
    if not self.auth():return
    table='integration_jobs' if p.endswith('/jobs') else 'result_history'
@@ -215,9 +222,11 @@ class Handler(auth_sessions.AuthMixin,base.Handler):
     if not r:return self.fail(404,'Unknown job')
     old=c.execute('SELECT digest FROM callbacks WHERE job_id=?',(job,)).fetchone()
     if old:return self.reply(200,{'status':'duplicate'}) if old[0]==digest else self.fail(409,'Conflicting callback')
-    latest=c.execute('SELECT MAX(version) FROM integration_jobs WHERE case_id=?',(case,)).fetchone()[0]
+    latest=reliability.version(c,case)
     if r['version']!=latest:return self.fail(409,'Stale analysis version')
-    if result.get('final_claim_decision') is not None:return self.fail(400,'Final insurance decisions are prohibited')
+    if result.get('final_claim_decision') is not None or result.get('claim_status_changed') is not False:return self.fail(400,'Final insurance decisions are prohibited')
+    expected=json.loads(r['payload'])
+    if result.get('claim_version')!=r['version'] or result.get('extracted')!=expected.get('claim_data') or result.get('evidence')!=expected.get('evidence'):return self.fail(409,'Result does not match reserved claim snapshot')
     result['requires_human_review']=True
     c.execute('INSERT INTO callbacks VALUES(?,?)',(job,digest))
     c.execute('INSERT INTO result_history VALUES(?,?,?,?,?)',(job,case,r['version'],json.dumps(result,ensure_ascii=False),base.now()))
@@ -334,5 +343,6 @@ if __name__=='__main__':
  recover()
  threading.Thread(target=worker,daemon=True).start()
  threading.Thread(target=preparation_worker,daemon=True).start()
+ threading.Thread(target=reliability.sync_worker,daemon=True).start()
  print(f'Insurance integration: http://127.0.0.1:{PORT}',flush=True)
  base.ThreadingHTTPServer(('127.0.0.1',PORT),Handler).serve_forever()

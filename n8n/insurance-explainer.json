@@ -1250,5 +1250,7 @@
   "active": false,
   "pinData": {},
   "staticData": null,
-  "meta": {}
+  "meta": {
+    "templateWorkflowId": "6711e34d242f4052"
+  }
 }

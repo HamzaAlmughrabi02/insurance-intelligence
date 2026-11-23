@@ -57,7 +57,7 @@ async function checkServices(){
  if(!accountSession)return;
  try{
   const status=await api('/system/status');
-  const detail=status.ready?'الخدمات المحلية متاحة لاستقبال المطالبات.':!status.n8n_reachable?'جارٍ انتظار تشغيل محرك المعالجة n8n…':'قاعدة بيانات المعالجة غير متاحة بعد…';
+  const detail=status.ready?'الخدمات المحلية متاحة لاستقبال المطالبات.':!status.n8n_reachable?'جارٍ انتظار تشغيل محرك المعالجة n8n…':!status.database_port_reachable?'قاعدة بيانات المعالجة غير متاحة بعد…':'رابط استقبال الوركفلو غير جاهز؛ تحقق من نشره وتشغيله في n8n.';
   if($('services-status'))$('services-status').textContent=detail;
   if($('submit')){$('submit').disabled=!status.ready||busy;$('submit').title=detail}
  }catch{}

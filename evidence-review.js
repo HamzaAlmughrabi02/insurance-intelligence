@@ -5,24 +5,30 @@ const fieldLabels={claim_number:'رقم المعاملة',policy_number:'رقم 
 function reviewResult(c){try{return typeof c.result==='string'?JSON.parse(c.result):c.result||{}}catch{return {}}}
 function findingInfo(raw){
  const text=typeof raw==='string'?raw:raw?.message||raw?.description||JSON.stringify(raw);
- if(/HOOD_REPAIR|hood|غطاء المحرك/i.test(text))return {key:'hood',title:'إصلاح غطاء المحرك يحتاج تحققًا',detail:(/850/.test(text)?'ورد تنبيه بشأن مبلغ 850 دينارًا لإصلاح الغطاء. ':'ورد تنبيه بشأن إصلاح غطاء المحرك. ')+'قارن الفاتورة مع تقرير الحادث والفحص؛ هذا تنبيه أولي وليس قرارًا باستحقاق المبلغ.',pattern:/hood|غطاء|850/i};
- if(/DOCUMENT_EVIDENCE_REQUIRES_REVIEW/.test(text))return {key:'evidence',title:'توجد معلومات في المستندات تحتاج مراجعة',detail:'ظهرت عبارات عن معلومات غير مؤكدة أو اختلافات. راجع المواضع المرتبطة أدناه في سياقها الأصلي.',pattern:/uncertain|discrepancy|not confirmed|غير مؤكد|تعارض/i};
- if(/POLICY_NOT_FOUND|Policy record was not found/i.test(text))return {key:'policy-missing',title:'لم يُعثر على سجل الوثيقة في قاعدة البيانات',detail:'هذا متعلق ببحث النظام في سجل السياسات؛ لا يعني أن ملف الوثيقة المرفوع غير موجود. تحقق من رقمها ومصدرها المعتمد.',field:'policy_number'};
- if(/UNVERIFIED_POLICY_SOURCE|Policy source has not been verified/i.test(text))return {key:'policy-source',title:'مصدر الوثيقة لم يُوثّق بعد',detail:'الوثيقة المرفوعة لا تمنح توثيقًا تلقائيًا لمصدر السياسة. يلزم التحقق من السجل المعتمد.',field:'policy_number'};
- if(/POLICY_STATUS_REQUIRES_REVIEW|not confirmed as ACTIVE/i.test(text))return {key:'policy-status',title:'حالة الوثيقة تحتاج تأكيدًا',detail:'لم يؤكد التحقق أن حالة الوثيقة فعّالة. راجع الحالة من مصدرها المعتمد.',field:'policy_number'};
- if(/CONFLICTING_POLICY_NUMBERS/.test(text))return {key:'policy-conflict',title:'رقم الوثيقة لا يتطابق بين البيانات والمستندات',detail:'قارن رقم الوثيقة المدخل مع الأرقام الظاهرة في المصادر؛ لم تُعدّل البيانات تلقائيًا.',pattern:/POL-[A-Z0-9-]+/i,field:'policy_number'};
- if(/OCR_LOW_CONFIDENCE|OCR_PAGE_LIMIT/.test(text))return {key:text,title:'قراءة المستند تحتاج تدقيقًا',detail:'قد تكون قراءة بعض الحروف أو الأرقام غير دقيقة، أو تجاوز المستند حد المعالجة. قارن النص بالصفحة الأصلية قبل الاعتماد.'};
- if(/FIELD_CONFLICT/.test(text))return {key:text,title:'بيانات مختلفة بين المستندات',detail:'لم يُختر حقل متعارض تلقائيًا. قارن القيم في الأصول وأدخل التصحيح مع السبب.'};
- if(/CONTEXT_MODEL_UNAVAILABLE/.test(text))return {key:text,title:'اكتمل الاستخراج دون مساعدة النموذج البصري',detail:'تعذر استخدام نموذج فهم الصفحة؛ احتفظنا بالقراءة والقواعد المتاحة. راجع الحقول غير المكتملة.'};
- if(/NO_READABLE_TEXT|UNREADABLE_DOCUMENT|IMAGE_OCR_NOT_AVAILABLE|OCR_UNAVAILABLE/.test(text))return {key:text,title:'تعذر استخراج نص قابل للمراجعة',detail:'اعرض الأصل للتدقيق اليدوي. قد تكون القراءة الآلية غير متاحة أو لم تستطع قراءة الصفحة.'};
- if(/DATE_OUTSIDE_POLICY_PERIOD|outside the recorded policy period/i.test(text))return {key:'date',title:'تاريخ الحادث خارج فترة الوثيقة المسجلة',detail:'راجع تاريخ الحادث وفترة الوثيقة. هذه نتيجة مقارنة أولية وليست قرار تغطية.',field:'accident_date'};
- if(/claim_data\./.test(text)){const field=text.split('claim_data.')[1]?.split(/\s/)[0];return {key:text,title:'بيان مطلوب يحتاج استكمالًا',detail:fieldLabels[field]||text,field}}
+ const diagnostic=(raw?.code||'')+' '+text;
+ if(raw?.code==='REPAIR_ITEM_REQUIRES_VERIFICATION'||text==='REPAIR_ITEM_REQUIRES_VERIFICATION')return {key:'repair',title:'بند إصلاح يحتاج مقارنة بالأدلة',detail:'المبلغ والعملة يظهران في الاقتباس المرتبط أدناه. وجود البند لا يثبت علاقته بالحادث أو استحقاقه.',sources:raw?.sources||[],pattern:/hood|غطاء/i};
+ if(/UNSUPPORTED_CLAIM_TYPE/.test(diagnostic))return {key:'unsupported-type',title:'نوع المعاملة يحتاج مختصًا',detail:'المسار الآلي الحالي مخصص لمطالبات المركبات. لم تُحوّل المعاملة إلى نوع آخر تلقائيًا.'};
+ if(/POLICY_VEHICLE|POLICY_VEHICLE_CHECK/.test(diagnostic))return {key:text,title:'مطابقة المركبة تحتاج مراجعة',detail:text.includes('MISMATCH')?'رقم المركبة لا يتطابق مع السجل المتاح.':'لا توجد بيانات سجل كافية لتأكيد مطابقة المركبة.'};
+ if(/POLICY_TYPE/.test(diagnostic))return {key:text,title:'نوع التأمين يحتاج مطابقة بالسجل',detail:'راجع نوع المطالبة ونوع التأمين المسجل؛ لا يعني هذا التنبيه رفض المطالبة.'};
+ if(/HOOD_REPAIR|hood|غطاء المحرك/i.test(diagnostic))return {key:'hood',title:'إصلاح غطاء المحرك يحتاج تحققًا',detail:(/850/.test(diagnostic)?'ورد تنبيه بشأن مبلغ 850 دينارًا لإصلاح الغطاء. ':'ورد تنبيه بشأن إصلاح غطاء المحرك. ')+'قارن الفاتورة مع تقرير الحادث والفحص؛ هذا تنبيه أولي وليس قرارًا باستحقاق المبلغ.',pattern:/hood|غطاء|850/i};
+ if(/DOCUMENT_EVIDENCE_REQUIRES_REVIEW/.test(diagnostic))return {key:'evidence',title:'توجد معلومات في المستندات تحتاج مراجعة',detail:'ظهرت عبارات عن معلومات غير مؤكدة أو اختلافات. راجع المواضع المرتبطة أدناه في سياقها الأصلي.',pattern:/uncertain|discrepancy|not confirmed|غير مؤكد|تعارض/i};
+ if(/POLICY_NOT_FOUND|Policy record was not found/i.test(diagnostic))return {key:'policy-missing',title:'لم يُعثر على سجل الوثيقة في قاعدة البيانات',detail:'هذا متعلق ببحث النظام في سجل السياسات؛ لا يعني أن ملف الوثيقة المرفوع غير موجود. تحقق من رقمها ومصدرها المعتمد.',field:'policy_number'};
+ if(/UNVERIFIED_POLICY_SOURCE|Policy source has not been verified/i.test(diagnostic))return {key:'policy-source',title:'مصدر الوثيقة لم يُوثّق بعد',detail:'الوثيقة المرفوعة لا تمنح توثيقًا تلقائيًا لمصدر السياسة. يلزم التحقق من السجل المعتمد.',field:'policy_number'};
+ if(/POLICY_STATUS_REQUIRES_REVIEW|not confirmed as ACTIVE/i.test(diagnostic))return {key:'policy-status',title:'حالة الوثيقة تحتاج تأكيدًا',detail:'لم يؤكد التحقق أن حالة الوثيقة فعّالة. راجع الحالة من مصدرها المعتمد.',field:'policy_number'};
+ if(/CONFLICTING_POLICY_NUMBERS/.test(diagnostic))return {key:'policy-conflict',title:'رقم الوثيقة لا يتطابق بين البيانات والمستندات',detail:'قارن رقم الوثيقة المدخل مع الأرقام الظاهرة في المصادر؛ لم تُعدّل البيانات تلقائيًا.',pattern:/POL-[A-Z0-9-]+/i,field:'policy_number'};
+ if(/OCR_LOW_CONFIDENCE|OCR_PAGE_LIMIT/.test(diagnostic))return {key:text,title:'قراءة المستند تحتاج تدقيقًا',detail:'قد تكون قراءة بعض الحروف أو الأرقام غير دقيقة، أو تجاوز المستند حد المعالجة. قارن النص بالصفحة الأصلية قبل الاعتماد.'};
+ if(/FIELD_CONFLICT/.test(diagnostic))return {key:text,title:'بيانات مختلفة بين المستندات',detail:'لم يُختر حقل متعارض تلقائيًا. قارن القيم في الأصول وأدخل التصحيح مع السبب.'};
+ if(/CONTEXT_MODEL_UNAVAILABLE/.test(diagnostic))return {key:text,title:'اكتمل الاستخراج دون مساعدة النموذج البصري',detail:'تعذر استخدام نموذج فهم الصفحة؛ احتفظنا بالقراءة والقواعد المتاحة. راجع الحقول غير المكتملة.'};
+ if(/NO_READABLE_TEXT|UNREADABLE_DOCUMENT|IMAGE_OCR_NOT_AVAILABLE|OCR_UNAVAILABLE/.test(diagnostic))return {key:text,title:'تعذر استخراج نص قابل للمراجعة',detail:'اعرض الأصل للتدقيق اليدوي. قد تكون القراءة الآلية غير متاحة أو لم تستطع قراءة الصفحة.'};
+ if(/DATE_OUTSIDE_POLICY_PERIOD|outside the recorded policy period/i.test(diagnostic))return {key:'date',title:'تاريخ الحادث خارج فترة الوثيقة المسجلة',detail:'راجع تاريخ الحادث وفترة الوثيقة. هذه نتيجة مقارنة أولية وليست قرار تغطية.',field:'accident_date'};
+ if(/claim_data\./.test(diagnostic)){const field=text.split('claim_data.')[1]?.split(/\s/)[0];return {key:text,title:'بيان مطلوب يحتاج استكمالًا',detail:fieldLabels[field]||text,field}}
  return {key:text,title:'ملاحظة تحتاج مراجعتك',detail:text};
 }
 function collectFindings(result){
- const seen=new Set();return [...(result.flags||[]),...(result.findings||[])].map(findingInfo).filter(f=>{if(seen.has(f.key))return false;seen.add(f.key);return true});
+ const seen=new Set();return [...(result.findings||[]),...(result.flags||[])].sort((a,b)=>Number(typeof b==='object')-Number(typeof a==='object')).map(raw=>({...findingInfo(raw),severity:raw?.severity||null})).filter(f=>{if(seen.has(f.key))return false;seen.add(f.key);return true});
 }
 function relatedSources(finding,evidence){
+ if(finding.sources?.length)return finding.sources.filter(s=>evidence.some(d=>d.document_id===s.document_id&&(d.pages||[]).some(p=>String(p.page)===String(s.page)&&p.text.includes(s.quote)))).map(s=>({document_id:s.document_id,page:s.page,text:s.quote}));
  if(!finding.pattern)return [];
  const matches=[];
  for(const doc of evidence)for(const page of doc.pages||[]){

@@ -7,7 +7,7 @@ Local insurance document intake and preliminary claims review, with an Arabic in
 ## Included
 
 - Arabic account setup/login, Argon2id password hashing, persistent HttpOnly sessions, CSRF protection and server-side reviewer roles.
-- Multi-document intake, native PDF text extraction and limited XLSX extraction; images/scanned PDFs require manual review.
+- Multi-document intake, native PDF text extraction and limited XLSX extraction; optional local OCR reads images/scanned PDFs with source and confidence checks.
 - In-page PDF/image preview, extracted-text view, Arabic review findings and text-matched source navigation.
 - Versioned correction/reanalysis, audit history, durable dispatch jobs and idempotent callbacks.
 - Sanitized production and explanation workflow templates, schema-only PostgreSQL initialization, prompt source and offline documentation.
@@ -36,9 +36,7 @@ Import the integration with locally generated credentials:
 .\.venv\Scripts\python.exe setup_n8n.py
 ```
 
-This imports an **inactive** workflow; its local URL is saved in `local-setup-state.json`. Review it in n8n, check its PostgreSQL and Header Auth credentials, and publish it from the editor. If you use the alternative external-model path, configure its model credential separately. Do not activate the explanation copy beside production: its webhook paths are identical.
-
-The original legacy webhook is retained in the template and lacks Header Auth. Keep this installation local; review or protect that entry point before any network exposure.
+This imports **four inactive workflows**; their IDs and the main editor URL are saved in `local-setup-state.json`. Check the PostgreSQL, Header Auth and local Ollama credentials. Publish the error handler, review synchronization and production workflows; publish the review assistant when its local model is available. If you use the alternative external-model path, configure its model credential separately. Keep the explanation template inactive: its webhook paths are identical to production. Stop n8n before CLI imports and restart it afterward so its runtime loads the imported versions.
 
 To create a Windows desktop shortcut:
 
@@ -88,7 +86,7 @@ This repository intentionally contains **no** account database, claims database,
 
 - Single-computer deployment; not a hardened public SaaS or multi-user administration product.
 - OCR and small-model field extraction are preliminary; unfamiliar formats, handwriting and complex tables still need human review.
-- PostgreSQL review-task closure is not fully synchronized with the website review UI.
+- Review actions synchronize through a durable outbox; outages appear as pending synchronization until retried.
 - No complete production malware scanning, file encryption or automatic cross-database backup policy.
 - Native PDF display can depend on browser settings; extracted text remains available.
 
@@ -106,6 +104,27 @@ On Windows, run `powershell -File install_document_reader.ps1` after installing 
 
 The backend keeps native PDF text, applies Arabic/English OCR to sparse/scanned pages or images, and uses the local vision model selectively for missing fields. It preserves quotes, page numbers and OCR boxes. Model proposals require matching text and an appropriate field label; this is evidence grounding, not independent verification. Conflicting policy IDs, vehicle IDs or dates remain unresolved for review. The reader does not automatically extract every invoice table or all pages with a vision model.
 
-Preparation is a durable background task before the existing n8n intake; original workflow connections are unchanged. The UI shows a preparing state and links extracted-field quotes to their source page. Original uploads and previous results remain intact. The public static demo continues to simulate the workflow and does not run OCR or connect to the local reader.
+Preparation is a durable background task before the n8n intake. The reliability upgrade orders review-task writes before result delivery. The UI shows a preparing state and links extracted-field quotes to their source page. Original uploads and previous results remain intact. The public static demo continues to simulate the workflow and does not run OCR or connect to the local reader.
 
 Run `python test_document_reader.py` for grounding/date/mixed-language tests. The account suite also checks asynchronous preparation and recovery. See [Arabic operation and limits](docs/DOCUMENT_READER_AR.txt).
+
+## Reliability upgrade and read-only review assistant
+
+The production graph registers the reserved claim/version, completes review-task writes before delivery, and routes node failures to a local error workflow. PostgreSQL keeps immutable claim revisions and the latest corrected fields. Review actions include an expected version, actor and reason; the outbox resolves current tasks and cancels older tasks without deleting their history. A task inserted late cannot reopen a reviewed version.
+
+The review assistant is a separate n8n Tools Agent with case-scoped read-only HTTP tools. A separate chain formats a schema-constrained draft, and the backend verifies each citation against source text actually returned by its tools. The local model is `qwen3-vl:2b-instruct`. No model can approve coverage or payment, edit claims or run SQL through assistant tools. A valid quote is not proof of document authenticity or OCR accuracy.
+
+Fresh installation uses the updated schema and `setup_n8n.py` to import four inactive workflows with newly generated IDs/credentials. Publish the production workflow, error handler and review synchronization workflow; publish the assistant when its local model is available. Keep `insurance-explainer.json` inactive/presentation-only to avoid duplicate webhook paths. Existing installations must back up their databases before applying `database-reliability.sql`; the current original installation has already been migrated.
+
+Native PDF text is preserved. OCR covers image-only storage files even without filename extensions, and large image regions on mixed pages. Low-confidence text is not promoted to a field by the model. Motor claims are the supported automated domain; other types require a specialist path. Invoice arithmetic checks apply only to clearly parsed single-currency rows without tax/discount adjustments; unfamiliar layouts remain manual review.
+
+Additional checks:
+
+```powershell
+python test_quality.py
+python test_reliability.py
+node test_workflow_reliability.js
+node test_reliability_ui.js
+```
+
+Synthetic regression checks do not establish accuracy on all real-world documents. See [Arabic upgrade and operation notes](docs/RELIABILITY_UPGRADE_AR.txt).

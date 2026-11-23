@@ -1,0 +1,63 @@
+{
+  "name": "INSURANCE — LOCAL ERROR HANDLER",
+  "nodes": [
+    {
+      "id": "5db99355-e739-461c-9eec-fd4f3bc68d4f",
+      "name": "Execution Error",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "048f1917-75af-4d79-85d2-2d346e4ddb02",
+      "name": "Record Local Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        300,
+        0
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8766/api/integrations/n8n/error",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {execution_id:$json.execution?.id??'',node:$json.execution?.lastNodeExecuted??'activation',message:$json.execution?.error?.message??'Workflow failed'} }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    }
+  ],
+  "connections": {
+    "Execution Error": {
+      "main": [
+        [
+          {
+            "node": "Record Local Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": false,
+  "pinData": {},
+  "staticData": null,
+  "meta": {
+    "templateWorkflowId": "d8455bca-ccfe-4f1c-bec2-94c581ab0f40"
+  }
+}

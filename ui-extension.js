@@ -3,10 +3,10 @@ const baseRenderDetail=renderDetail;
 renderDetail=function(c){
  let html=baseRenderDetail(c);
  if(!connected)return html;
- if(c.status==='failed')return html+`<div class="notice">تعذرت المعالجة. راجع حالة الربط ثم أعد المحاولة.</div><button class="primary" onclick="retryCase('${esc(c.id)}')">إعادة المحاولة</button>`;
- if(c.status!=='review')return html;
+ if(c.status==='failed')html+=`<div class="notice">تعذرت المعالجة. يمكنك تصحيح البيانات بإصدار جديد أو إعادة المحاولة عند إصلاح سبب التعذر.</div><button class="primary" onclick="retryCase('${esc(c.id)}')">إعادة المحاولة</button>`;
+ if(!['review','failed'].includes(c.status))return html;
  let r={};try{r=typeof c.result==='string'?JSON.parse(c.result):c.result||{}}catch{}
- const fields=r.extracted||{};
+ const fields=r.extracted||c.failed_fields||{};
  const labels={policy_number:'رقم الوثيقة',accident_date:'تاريخ الحادث (YYYY-MM-DD)',vehicle_plate:'رقم المركبة',claim_type:'نوع المطالبة',incident_description:'وصف الحادث'};
  html+=`<details style="margin-top:24px"><summary>تصحيح البيانات وإعادة التحليل</summary><p class="muted">يُحفظ التصحيح بإصدار جديد وسبب مكتوب، وتبقى الأدلة والنتائج السابقة محفوظة.</p><form id="correction-form" onsubmit="reanalyzeCase(event,'${esc(c.id)}')"><div class="formrow">${Object.entries(labels).map(([key,label])=>`<label class="field ${key==='incident_description'?'wide':''}">${label}<input name="${key}" value="${esc(fields[key]||'')}" ${key==='accident_date'?'type="date"':''} maxlength="${key==='incident_description'?10000:150}" required></label>`).join('')}<label class="field wide">سبب التصحيح أو إعادة التحقق<textarea name="reason" required maxlength="2000" rows="3"></textarea></label></div><button class="primary" type="submit">حفظ التصحيح وإعادة التحليل</button></form></details>`;
  return html;
@@ -46,7 +46,7 @@ async function retryCase(id){
  try{await api('/cases/'+encodeURIComponent(id)+'/retry','POST',{});currentId=id;await refresh();render();startPolling();toast('بدأت إعادة المحاولة')}catch(e){toast(e.message)}
 }
 const baseBadge=badge;
-badge=function(s){return s==='failed'?'<span class="pill review">تعذرت المعالجة</span>':s==='preparing'?'<span class="pill processing">استخراج المستندات</span>':baseBadge(s)};
+badge=function(s){if(s==='approved')return '<span class="pill done">مراجعة مسجلة</span>';if(s==='rejected')return '<span class="pill review">مراجعة غير معتمدة</span>';return s==='failed'?'<span class="pill review">تعذرت المعالجة</span>':s==='preparing'?'<span class="pill processing">استخراج المستندات</span>':baseBadge(s)};
 const readerBaseStatus=analysisStatus;
 analysisStatus=function(){const c=cases.find(x=>x.id===currentId)||cases.find(x=>x.status==='preparing');if(c?.status!=='preparing')return readerBaseStatus();return `<div class="notice" role="status"><strong>${esc(c.id)} · جارٍ قراءة المستندات</strong><p>نستخرج النص ونقرأ الصور عند الحاجة، ثم نجهّز البيانات للتحقق في n8n. قد تستغرق الصفحات الممسوحة وقتًا أطول.</p><p>يمكنك متابعة المعاملات؛ ستتحدث الحالة تلقائيًا.</p></div>`};
 const baseConnect=connect;

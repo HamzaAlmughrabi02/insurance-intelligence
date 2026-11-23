@@ -339,9 +339,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "\nINSERT INTO claims (\n    claim_number,\n    policy_number,\n    claim_type,\n    accident_date,\n    vehicle_plate,\n    incident_description\n)\nSELECT\n    data->>'claim_number',\n    data->>'policy_number',\n    data->>'claim_type',\n    (data->>'accident_date')::date,\n    data->>'vehicle_plate',\n    data->>'incident_description'\nFROM (\n    SELECT $1::jsonb AS data\n) AS payload\nON CONFLICT (claim_number) DO UPDATE SET claim_number = EXCLUDED.claim_number\nRETURNING id, claim_number, status, created_at;\n",
+        "query": "SELECT * FROM public.insurance_record_claim($1::jsonb);",
         "options": {
-          "queryReplacement": "=\n{{ JSON.stringify({\n  claim_number: $json.claim_data.claim_number,\n  policy_number: $json.claim_data.policy_number,\n  claim_type: $json.claim_data.claim_type,\n  accident_date: $json.claim_data.accident_date,\n  vehicle_plate: $json.claim_data.vehicle_plate,\n  incident_description: $json.claim_data.incident_description\n}) }}\n"
+          "queryReplacement": "={{ JSON.stringify({...$json.claim_data,claim_version:$json.claim_version}) }}"
         }
       },
       "type": "n8n-nodes-base.postgres",
@@ -373,7 +373,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "\nSELECT\n    p.id,\n    p.policy_number,\n    p.insurer_name,\n    p.effective_date::text AS effective_date,\n    p.expiry_date::text AS expiry_date,\n    p.policy_status,\n    p.source_verified,\n    (p.id IS NOT NULL) AS policy_found\nFROM (\n    SELECT $1::text AS requested_policy_number\n) AS request\nLEFT JOIN public.policies p\n    ON p.policy_number = request.requested_policy_number;\n",
+        "query": "\nSELECT\n    p.id,\n    p.policy_number,\n    p.insurer_name,\n    p.effective_date::text AS effective_date,\n    p.expiry_date::text AS expiry_date,\n    p.policy_status,\n    p.source_verified,p.insured_vehicle_plate,p.policy_claim_type,p.source_reference,p.verified_at::text AS verified_at,\n    (p.id IS NOT NULL) AS policy_found\nFROM (\n    SELECT $1::text AS requested_policy_number\n) AS request\nLEFT JOIN public.policies p\n    ON p.policy_number = request.requested_policy_number;\n",
         "options": {
           "queryReplacement": "={{ $('Prepare Policy Verification Request').first().json.policy_number }}"
         }
@@ -389,7 +389,7 @@
     },
     {
       "parameters": {
-        "jsCode": "\nconst request = $('Prepare Policy Verification Request').first().json;\nconst policy = $input.first()?.json ?? {};\n\nconst policyFound = policy.policy_found === true;\nconst reasons = [];\n\nlet dateCheck = \"UNVERIFIED\";\n\nif (!policyFound) {\n  reasons.push(\"POLICY_NOT_FOUND\");\n} else {\n  if (policy.policy_status !== \"ACTIVE\") {\n    reasons.push(\"POLICY_NOT_CONFIRMED_ACTIVE\");\n  }\n\n  if (policy.source_verified !== true) {\n    reasons.push(\"POLICY_SOURCE_NOT_VERIFIED\");\n  }\n\n  const accidentDate = request.accident_date;\n  const startDate = policy.effective_date;\n  const endDate = policy.expiry_date;\n\n  const validDate = value =>\n    typeof value === \"string\" &&\n    /^\\d{4}-\\d{2}-\\d{2}$/.test(value) &&\n    !Number.isNaN(Date.parse(value)) &&\n    new Date(value).toISOString().slice(0, 10) === value;\n\n  if (\n    !validDate(accidentDate) ||\n    !validDate(startDate) ||\n    !validDate(endDate)\n  ) {\n    dateCheck = \"UNVERIFIED\";\n    reasons.push(\"INVALID_OR_MISSING_DATES\");\n  } else if (\n    accidentDate >= startDate &&\n    accidentDate <= endDate\n  ) {\n    dateCheck = \"WITHIN_POLICY_PERIOD\";\n  } else {\n    dateCheck = \"OUTSIDE_POLICY_PERIOD\";\n    reasons.push(\"ACCIDENT_OUTSIDE_POLICY_PERIOD\");\n  }\n}\n\nreturn [{\n  json: {\n    claim_id: request.claim_id,\n    claim_version: request.claim_version,\n    job_id: request.job_id,\n    correlation_id: request.correlation_id,\n    policy_number: request.policy_number,\n\n    accident_date: request.accident_date ?? null,\n    effective_date: policyFound ? policy.effective_date : null,\n    expiry_date: policyFound ? policy.expiry_date : null,\n\n    policy_found: policyFound,\n    policy_status: policyFound\n      ? policy.policy_status\n      : \"MISSING\",\n    source_verified:\n      policyFound && policy.source_verified === true,\n\n    date_check: dateCheck,\n    verification_status: \"UNVERIFIED\",\n    coverage_status: \"UNVERIFIED\",\n    evidence_status: \"UNVERIFIED\",\n\n    requires_human_review: reasons.length > 0,\n    review_reasons: reasons,\n    claim_status_changed: false\n  }\n}];\n"
+        "jsCode": "const request=$('Prepare Policy Verification Request').first().json;\nconst claim=$('Normalize Webhook Input').first().json.claim_data;\nconst policy=$input.first()?.json??{},found=policy.policy_found===true,reasons=[];\nconst validDate=v=>typeof v==='string'&&/^\\d{4}-\\d{2}-\\d{2}$/.test(v)&&!Number.isNaN(Date.parse(v))&&new Date(v).toISOString().slice(0,10)===v;\nconst norm=v=>String(v??'').toUpperCase().replace(/[\\s-]/g,'');\nconst sourceAudited=found&&policy.source_verified===true&&typeof policy.source_reference==='string'&&!!policy.source_reference.trim()&&!!policy.verified_at&&!Number.isNaN(Date.parse(policy.verified_at))&&Date.parse(policy.verified_at)<=Date.now();\nlet dateCheck='UNVERIFIED',vehicle='NOT_VERIFIED',type='NOT_VERIFIED';\nif(!found)reasons.push('POLICY_NOT_FOUND');\nelse {\n if(policy.policy_status!=='ACTIVE')reasons.push('POLICY_NOT_CONFIRMED_ACTIVE');\n if(policy.source_verified!==true)reasons.push('POLICY_SOURCE_NOT_VERIFIED');\n if(!sourceAudited)reasons.push('POLICY_SOURCE_AUDIT_MISSING');\n if(!validDate(request.accident_date)||!validDate(policy.effective_date)||!validDate(policy.expiry_date)||policy.effective_date>policy.expiry_date)reasons.push('INVALID_OR_MISSING_DATES');\n else if(request.accident_date>=policy.effective_date&&request.accident_date<=policy.expiry_date)dateCheck='WITHIN_POLICY_PERIOD';\n else{dateCheck='OUTSIDE_POLICY_PERIOD';reasons.push('ACCIDENT_OUTSIDE_POLICY_PERIOD')}\n if(policy.insured_vehicle_plate){vehicle=norm(policy.insured_vehicle_plate)===norm(claim.vehicle_plate)?'MATCH':'MISMATCH';if(vehicle==='MISMATCH')reasons.push('POLICY_VEHICLE_MISMATCH')}\n else reasons.push('POLICY_VEHICLE_NOT_VERIFIED');\n if(policy.policy_claim_type){type=policy.policy_claim_type===claim.claim_type?'MATCH':'MISMATCH';if(type==='MISMATCH')reasons.push('POLICY_TYPE_MISMATCH')}\n else reasons.push('POLICY_TYPE_NOT_VERIFIED');\n}\nreturn [{json:{...request,policy_found:found,policy_status:found?policy.policy_status:'MISSING',source_verified:sourceAudited,\n source_reference:policy.source_reference??null,source_verified_at:policy.verified_at??null,checked_at:new Date().toISOString(),\n effective_date:policy.effective_date??null,expiry_date:policy.expiry_date??null,date_check:dateCheck,vehicle_check:vehicle,type_check:type,\n verification_status:reasons.length?'REQUIRES_REVIEW':'RECORDED_CHECKS_MATCH',coverage_status:'UNVERIFIED',evidence_status:'UNVERIFIED',\n requires_human_review:reasons.length>0,review_reasons:reasons,claim_status_changed:false}}];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -519,7 +519,7 @@
     },
     {
       "parameters": {
-        "jsCode": "\nconst input = $input.first().json;\nconst verification = input.policy_verification ?? {};\n\nconst findings = [];\nconst missingInformation = [];\n\nfunction addFinding(code, severity, message) {\n  findings.push({ code, severity, message });\n}\n\nfunction addMissing(value) {\n  if (!missingInformation.includes(value)) {\n    missingInformation.push(value);\n  }\n}\n\n// 1. Policy existence\nif (verification.policy_found !== true) {\n  addFinding(\n    \"POLICY_NOT_FOUND\",\n    \"HIGH\",\n    \"Policy record was not found.\"\n  );\n}\n\n// 2. Policy source verification\nif (verification.source_verified !== true) {\n  addFinding(\n    \"UNVERIFIED_POLICY_SOURCE\",\n    \"HIGH\",\n    \"Policy source has not been verified.\"\n  );\n  addMissing(\"Verified policy source\");\n}\n\n// 3. Policy status\nif (verification.policy_status !== \"ACTIVE\") {\n  addFinding(\n    \"POLICY_STATUS_REQUIRES_REVIEW\",\n    \"MEDIUM\",\n    \"Policy status is not confirmed as ACTIVE.\"\n  );\n}\n\n// 4. Accident date\nif (verification.date_check === \"OUTSIDE_POLICY_PERIOD\") {\n  addFinding(\n    \"DATE_OUTSIDE_POLICY_PERIOD\",\n    \"HIGH\",\n    \"Accident date is outside the recorded policy period.\"\n  );\n}\n\nif (verification.date_check !== \"WITHIN_POLICY_PERIOD\") {\n  addMissing(\"Verified policy coverage dates\");\n}\n\n// 5. Coverage verification\nif (verification.coverage_status !== \"VERIFIED\") {\n  addMissing(\"Confirmed coverage terms\");\n}\n\n// 6. Supporting evidence\nif (verification.evidence_status !== \"VERIFIED\") {\n  addMissing(\"Verified supporting evidence\");\n}\n\n// 7. Incident description\nif (\n  typeof input.incident_description !== \"string\" ||\n  !input.incident_description.trim()\n) {\n  addMissing(\"Incident description\");\n}\n\n// 8. Human review policy\n// MVP: all preliminary analyses require supervisor review.\nconst requiresHumanReview = true;\n\nconst summary = findings.length > 0 || missingInformation.length > 0\n  ? \"Preliminary checks identified issues requiring verification.\"\n  : \"Preliminary checks completed. Supervisor review is still required.\";\n\nreturn [{\n  json: {\n    schema_version: \"1.0\",\n\n    job_id: input.job_id,\n    claim_id: input.claim_id,\n    claim_version: input.claim_version,\n\n    claim_context: {\n      claim_type: input.claim_type,\n      policy_number: input.policy_number,\n      accident_date: input.accident_date,\n      incident_description: input.incident_description\n    },\n\n    policy_verification: verification,\n\n    analysis_type: \"RULE_BASED_PRELIMINARY\",\n    analysis_status: \"COMPLETED\",\n\n    summary,\n    findings,\n    missing_information: missingInformation,\n\n    recommendation: \"REFER_TO_HUMAN_REVIEW\",\n    requires_human_review: requiresHumanReview,\n\n    final_claim_decision: null,\n    claim_status_changed: false,\n\n    analyzed_at: new Date().toISOString()\n  }\n}];\n"
+        "jsCode": "const input=$input.first().json,verification=input.policy_verification??{},intake=$('Normalize Webhook Input').first().json;\nconst findings=[...(intake.document_findings??[])],missing=[];\nconst add=(code,severity,message)=>findings.push({code,severity,message,source:'RULE',verification_status:'RECORDED_CHECK'});\nconst documentMessages={FIELD_CONFLICT:'توجد قيم متعارضة لحقل مستخرج؛ يحتاج تصحيحًا موثقًا.',CONFLICTING_POLICY_NUMBERS:'توجد أرقام وثائق مختلفة أو رقم مصحح لا يطابق النص المقروء.',OCR_LOW_CONFIDENCE:'قراءة إحدى الصفحات منخفضة الثقة؛ قارنها بالأصل.',OCR_UNAVAILABLE:'تعذرت القراءة الآلية لإحدى الصفحات.',OCR_PAGE_LIMIT:'تجاوز المستند حد الصفحات المعالجة آليًا.',DOCUMENT_EVIDENCE_REQUIRES_REVIEW:'تتضمن المستندات معلومات غير محسومة تحتاج مقارنة بالمصادر.',CONTEXT_MODEL_UNAVAILABLE:'لم تتوفر مساعدة النموذج البصري؛ استُخدمت القراءة والقواعد المتاحة.',INCIDENT_DESCRIPTIONS_DIFFER:'توجد أوصاف مختلفة للحادث؛ قارنها في سياقها.'};\nfor(const flag of intake.document_flags??[]){const code=String(flag).split(':')[0];if(documentMessages[code]&&!findings.some(f=>f.code===code))add(code,['FIELD_CONFLICT','CONFLICTING_POLICY_NUMBERS'].includes(code)?'HIGH':code==='CONTEXT_MODEL_UNAVAILABLE'?'LOW':'MEDIUM',documentMessages[code])}\nif(!verification.policy_found)add('POLICY_NOT_FOUND','MEDIUM','لم يُعثر على سجل الوثيقة؛ هذا لا يثبت عدم وجودها.');\nif(!verification.source_verified||!verification.source_reference||!verification.source_verified_at){add('UNVERIFIED_POLICY_SOURCE','MEDIUM','مصدر الوثيقة لم يكتمل توثيقه.');missing.push('توثيق مصدر الوثيقة وتاريخ التحقق')}\nif(verification.policy_status!=='ACTIVE')add('POLICY_STATUS_REQUIRES_REVIEW','MEDIUM','حالة الوثيقة غير مؤكدة كوثيقة فعّالة.');\nif(verification.date_check==='OUTSIDE_POLICY_PERIOD')add('DATE_OUTSIDE_POLICY_PERIOD','HIGH','تاريخ الحادث خارج فترة الوثيقة المسجلة؛ يحتاج تحققًا بشريًا.');\nif(verification.date_check!=='WITHIN_POLICY_PERIOD')missing.push('التحقق من تاريخ الحادث وفترة الوثيقة');\nfor(const [key,label] of [['vehicle_check','مطابقة المركبة'],['type_check','مطابقة نوع التأمين']]){\n if(verification[key]==='MISMATCH')add('POLICY_'+key.toUpperCase()+'_MISMATCH','HIGH',label+' غير متطابقة مع السجل.');\n else if(verification[key]!=='MATCH')missing.push(label+' مع سجل الوثيقة');\n}\nmissing.push('مراجعة شروط التغطية والاستثناءات لدى المختص','التحقق البشري من المستندات الأصلية');\nreturn [{json:{schema_version:'1.0',job_id:input.job_id,claim_id:input.claim_id,claim_version:input.claim_version,\n claim_context:{claim_type:input.claim_type,policy_number:input.policy_number,accident_date:input.accident_date,incident_description:input.incident_description},\n policy_verification:verification,analysis_type:'RULE_BASED_PRELIMINARY',analysis_status:'COMPLETED',\n summary:'اكتملت الفحوص الأولية. النتائج تبيّن الملاحظات وما لم يُتحقق منه؛ لا تمثل قرار تغطية أو دفع.',\n findings,missing_information:[...new Set(missing)],recommendation:'REFER_TO_HUMAN_REVIEW',requires_human_review:true,\n final_claim_decision:null,claim_status_changed:false,analyzed_at:new Date().toISOString()}}];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -532,12 +532,10 @@
     },
     {
       "parameters": {
-        "mode": "raw",
-        "jsonOutput": "={{ (() => {\n  const source = $('Evaluate Policy Verification').first().json;\n  const intake = $('Normalize Webhook Input').first().json;\n\n  const claim = intake.claim_data ?? intake;\n\n  return {\n    schema_version: \"1.0\",\n\n    job_id: \"AI-\" + String(source.claim_id ?? claim.claim_number) + (intake.web_integration ? \"-v\" + intake.claim_version : \"\"),\n    claim_id: source.claim_id ?? claim.claim_number,\n    claim_version: Number(source.claim_version ?? 1),\n\n    policy_number: source.policy_number ?? claim.policy_number,\n    claim_type: claim.claim_type,\n    accident_date: source.accident_date ?? claim.accident_date,\n    incident_description: claim.incident_description,\n\n    policy_verification: {\n      policy_found: source.policy_found === true,\n      policy_status: source.policy_status ?? \"UNVERIFIED\",\n      source_verified: source.source_verified === true,\n      date_check: source.date_check ?? \"UNVERIFIED\",\n      coverage_status: source.coverage_status ?? \"UNVERIFIED\",\n      evidence_status: source.evidence_status ?? \"UNVERIFIED\",\n      review_reasons: source.review_reasons ?? []\n    },\n\n    analysis_status: \"PENDING\",\n    human_review_required: true\n  };\n})() }}",
-        "options": {}
+        "jsCode": "const source=$('Evaluate Policy Verification').first().json;\nconst intake=$('Normalize Webhook Input').first().json;\nreturn [{json:{schema_version:'1.0',job_id:'AI-'+intake.claim_id+'-v'+intake.claim_version,claim_id:intake.claim_id,claim_version:intake.claim_version,...intake.claim_data,policy_verification:source,analysis_status:'PENDING',human_review_required:true}}];"
       },
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
       "position": [
         3184,
         640
@@ -548,7 +546,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "\nINSERT INTO public.preliminary_analyses (\n    job_id,\n    claim_id,\n    claim_version,\n    analysis_type,\n    analysis_status,\n    summary,\n    findings,\n    missing_information,\n    recommendation,\n    requires_human_review\n)\nSELECT\n    data->>'job_id',\n    data->>'claim_id',\n    (data->>'claim_version')::integer,\n    data->>'analysis_type',\n    data->>'analysis_status',\n    data->>'summary',\n    COALESCE(data->'findings', '[]'::jsonb),\n    COALESCE(data->'missing_information', '[]'::jsonb),\n    'REFER_TO_HUMAN_REVIEW',\n    TRUE\nFROM (\n    SELECT $1::jsonb AS data\n) AS payload\nON CONFLICT (job_id) DO UPDATE\nSET\n    analysis_type = EXCLUDED.analysis_type,\n    analysis_status = EXCLUDED.analysis_status,\n    summary = EXCLUDED.summary,\n    findings = EXCLUDED.findings,\n    missing_information = EXCLUDED.missing_information,\n    recommendation = 'REFER_TO_HUMAN_REVIEW',\n    requires_human_review = TRUE\nWHERE\n    public.preliminary_analyses.claim_id = EXCLUDED.claim_id\n    AND public.preliminary_analyses.claim_version = EXCLUDED.claim_version\nRETURNING\n    id,\n    claim_id,\n    job_id,\n    analysis_status,\n    created_at;\n",
+        "query": "SELECT * FROM public.insurance_save_analysis($1::jsonb);",
         "options": {
           "queryReplacement": "={{ JSON.stringify($json) }}"
         }
@@ -582,7 +580,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "\nWITH source AS (\n    SELECT\n        id,\n        job_id,\n        claim_id,\n        claim_version,\n        findings\n    FROM public.preliminary_analyses\n    WHERE job_id = $1::text\n      AND analysis_status IN (\n          'COMPLETED',\n          'REQUIRES_REVIEW'\n      )\n      AND requires_human_review = TRUE\n),\nsaved AS (\n    INSERT INTO public.review_tasks (\n        claim_id,\n        claim_version,\n        job_id,\n        correlation_id,\n        review_type,\n        review_status,\n        policy_number,\n        review_reasons\n    )\n    SELECT\n        claim_id,\n        claim_version,\n        job_id,\n        'AI-ANALYSIS-' || id::text,\n        'AI_PRELIMINARY_ANALYSIS',\n        'PENDING',\n        NULL,\n        COALESCE(\n            (\n                SELECT jsonb_agg(DISTINCT finding->>'code')\n                FROM jsonb_array_elements(\n                    CASE\n                        WHEN jsonb_typeof(findings) = 'array'\n                        THEN findings\n                        ELSE '[]'::jsonb\n                    END\n                ) AS finding\n                WHERE finding->>'code' IS NOT NULL\n            ),\n            '[]'::jsonb\n        )\n    FROM source\n    ON CONFLICT (job_id, review_type)\n    DO NOTHING\n    RETURNING id\n)\nSELECT\n    t.id,\n    t.claim_id,\n    t.job_id,\n    t.review_type,\n    t.review_status,\n    t.review_reasons,\n    t.created_at\nFROM public.review_tasks t\nJOIN source s\n    ON t.job_id = s.job_id\n   AND t.claim_id = s.claim_id\nWHERE t.review_type = 'AI_PRELIMINARY_ANALYSIS';\n",
+        "query": "\nWITH source AS (\n    SELECT\n        id,\n        job_id,\n        claim_id,\n        claim_version,\n        findings\n    FROM public.preliminary_analyses\n    WHERE job_id = $1::text\n      AND analysis_status IN (\n          'COMPLETED',\n          'REQUIRES_REVIEW'\n      )\n      AND requires_human_review = TRUE\n),\nsaved AS (\n    INSERT INTO public.review_tasks (\n        claim_id,\n        claim_version,\n        job_id,\n        correlation_id,\n        review_type,\n        review_status,\n        policy_number,\n        review_reasons\n    )\n    SELECT\n        claim_id,\n        claim_version,\n        job_id,\n        'AI-ANALYSIS-' || id::text,\n        'AI_PRELIMINARY_ANALYSIS',\n        'PENDING',\n        NULL,\n        COALESCE(\n            (\n                SELECT jsonb_agg(DISTINCT finding->>'code')\n                FROM jsonb_array_elements(\n                    CASE\n                        WHEN jsonb_typeof(findings) = 'array'\n                        THEN findings\n                        ELSE '[]'::jsonb\n                    END\n                ) AS finding\n                WHERE finding->>'code' IS NOT NULL\n            ),\n            '[]'::jsonb\n        )\n    FROM source\n    ON CONFLICT (job_id, review_type)\n    DO NOTHING\n    RETURNING *\n)\nSELECT id,claim_id,job_id,review_type,review_status,review_reasons,created_at FROM saved\nUNION ALL SELECT t.id,t.claim_id,t.job_id,t.review_type,t.review_status,t.review_reasons,t.created_at\nFROM public.review_tasks t JOIN source s ON t.job_id=s.job_id AND t.claim_id=s.claim_id\nWHERE t.review_type='AI_PRELIMINARY_ANALYSIS' AND NOT EXISTS(SELECT 1 FROM saved);",
         "options": {
           "queryReplacement": "={{ $('Load Analysis For Review').first().json.job_id }}"
         }
@@ -598,7 +596,7 @@
     },
     {
       "parameters": {
-        "jsCode": "\nconst items = $input.all();\n\nreturn items.map((item) => {\n  const data = item.json;\n  const claim = data.claim_data || {};\n\n  const requiredEnvelope = [\n    \"schema_version\",\n    \"event_id\",\n    \"event_type\",\n    \"job_id\",\n    \"claim_id\",\n    \"claim_version\",\n    \"correlation_id\",\n    \"occurred_at\"\n  ];\n\n  const requiredClaim = [\n    \"claim_number\",\n    \"policy_number\",\n    \"claim_type\",\n    \"accident_date\",\n    \"vehicle_plate\",\n    \"incident_description\"\n  ];\n\n  const missing = [];\n\n  for (const field of requiredEnvelope) {\n    if (\n      data[field] === undefined ||\n      data[field] === null ||\n      data[field] === \"\"\n    ) {\n      missing.push(field);\n    }\n  }\n\n  for (const field of requiredClaim) {\n    const value = claim[field];\n\n    if (\n      value === undefined ||\n      value === null ||\n      (typeof value === \"string\" && !value.trim())\n    ) {\n      missing.push(`claim_data.${field}`);\n    }\n  }\n\n  const warnings = [];\n\n  if (data.event_type !== \"claim.submitted\") {\n    warnings.push(\"Unexpected event type\");\n  }\n\n  if (data.schema_version !== \"1.0\") {\n    warnings.push(\"Unsupported schema version\");\n  }\n\n  if (\n    !Number.isInteger(data.claim_version) ||\n    data.claim_version < 1\n  ) {\n    warnings.push(\"Invalid claim version\");\n  }\n\n  if (\n    claim.accident_date &&\n    !/^\\d{4}-\\d{2}-\\d{2}$/.test(claim.accident_date)\n  ) {\n    warnings.push(\"Invalid accident date format\");\n  }\n\n  if (claim.accident_date && (/^\\d{4}-\\d{2}-\\d{2}$/.test(claim.accident_date)) && (Number.isNaN(Date.parse(claim.accident_date)) || new Date(claim.accident_date).toISOString().slice(0,10) !== claim.accident_date)) warnings.push(\"Invalid accident calendar date\");\n  const complete = missing.length === 0;\n  const valid = complete && warnings.length === 0;\n\n  return {\n    json: {\n      ...data,\n      validation: {\n        valid,\n        completeness: {\n          complete,\n          missing_fields: missing\n        },\n        warnings,\n        requires_human_review: !valid,\n        persistence_status: \"NOT_PERSISTED\",\n        claim_status_changed: false\n      }\n    }\n  };\n});\n"
+        "jsCode": "const data=$input.first().json, claim=data.claim_data;\nconst missing=[],warnings=[];\nconst string=(value,name,max=100)=>{if(typeof value!=='string'||!value.trim()||value.length>max)missing.push(name)};\nfor(const key of ['schema_version','event_id','event_type','job_id','claim_id','correlation_id','occurred_at'])string(data[key],key);\nif(!claim||typeof claim!=='object'||Array.isArray(claim))missing.push('claim_data');\nelse {\n for(const [key,max] of Object.entries({claim_number:100,policy_number:100,claim_type:50,accident_date:10,vehicle_plate:50,incident_description:10000}))string(claim[key],'claim_data.'+key,max);\n if(claim.claim_number!==data.claim_id)warnings.push('CLAIM_ID_MISMATCH');\n if(claim.claim_type!=='motor')warnings.push('UNSUPPORTED_CLAIM_TYPE');\n const date=claim.accident_date;\n if(typeof date!=='string'||!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)||Number.isNaN(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date)warnings.push('INVALID_ACCIDENT_DATE');\n else if(date>new Date().toISOString().slice(0,10))warnings.push('FUTURE_ACCIDENT_DATE');\n}\nif(data.schema_version!=='1.0')warnings.push('UNSUPPORTED_SCHEMA');\nif(data.event_type!=='claim.submitted')warnings.push('UNEXPECTED_EVENT_TYPE');\nif(!Number.isInteger(data.claim_version)||data.claim_version<1)warnings.push('INVALID_CLAIM_VERSION');\nif(typeof data.occurred_at!=='string'||!/^\\d{4}-\\d\\d-\\d\\dT/.test(data.occurred_at)||Number.isNaN(Date.parse(data.occurred_at)))warnings.push('INVALID_EVENT_TIMESTAMP');\nreturn [{json:{...data,validation:{valid:!missing.length&&!warnings.length,completeness:{complete:!missing.length,missing_fields:missing},warnings,requires_human_review:!!(missing.length||warnings.length),scope:'SCHEMA_AND_CONSISTENCY_NOT_TRUTH',claim_status_changed:false}}}];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -612,7 +610,7 @@
     {
       "parameters": {
         "mode": "raw",
-        "jsonOutput": "=\n{{ ({\n  claim_id: $json.claim_id,\n  claim_version: $json.claim_version,\n  job_id: $json.job_id,\n  correlation_id: $json.correlation_id,\n\n  review_type: \"DATA_VALIDATION\",\n  review_status: \"PENDING\",\n  requires_human_review: true,\n\n  policy_number: $json.claim_data?.policy_number || null,\n\n  missing_fields: $json.validation?.completeness?.missing_fields ?? [],\n  warnings: $json.validation?.warnings ?? [],\n\n  review_reasons: [\n    ...($json.validation?.completeness?.missing_fields ?? [])\n      .map(field => \"MISSING_FIELD: \" + field),\n    ...($json.validation?.warnings ?? [])\n      .map(warning => \"WARNING: \" + warning)\n  ],\n\n  message: \"Claim requires human review before processing\",\n  claim_status_changed: false\n}) }}\n",
+        "jsonOutput": "=\n{{ ({\n  claim_id: $json.claim_id,\n  claim_version: $json.claim_version,\n  job_id: $json.job_id,\n  correlation_id: $json.correlation_id,\n\n  review_type: \"DATA_VALIDATION\",\n  review_status: \"PENDING\",\n  requires_human_review: true,\n\n  policy_number: (typeof $json.claim_data?.policy_number === 'string' && $json.claim_data.policy_number.length <= 100 ? $json.claim_data.policy_number : null),\n\n  missing_fields: $json.validation?.completeness?.missing_fields ?? [],\n  warnings: $json.validation?.warnings ?? [],\n\n  review_reasons: [\n    ...($json.validation?.completeness?.missing_fields ?? [])\n      .map(field => \"MISSING_FIELD: \" + field),\n    ...($json.validation?.warnings ?? [])\n      .map(warning => \"WARNING: \" + warning)\n  ],\n\n  message: \"Claim requires human review before processing\",\n  claim_status_changed: false\n}) }}\n",
         "options": {}
       },
       "type": "n8n-nodes-base.set",
@@ -763,7 +761,7 @@
     },
     {
       "parameters": {
-        "jsCode": "\nconst items = $input.all();\n\nreturn items.map((item) => {\n  const raw = item.json.text ?? item.json.output ?? \"\";\n  const errors = [];\n  let parsed = null;\n\n  try {\n    if (typeof raw === \"object\" && raw !== null) {\n      parsed = raw;\n    } else if (typeof raw === \"string\") {\n      const cleaned = raw\n        .trim()\n        .replace(/^```(?:json)?\\s*/i, \"\")\n        .replace(/\\s*```$/, \"\")\n        .trim();\n\n      parsed = JSON.parse(cleaned);\n    } else {\n      errors.push(\"LLM response is not valid JSON\");\n    }\n  } catch (error) {\n    errors.push(\"JSON parsing failed: \" + error.message);\n  }\n\n  if (\n    !parsed ||\n    typeof parsed !== \"object\" ||\n    Array.isArray(parsed)\n  ) {\n    errors.push(\"Expected a JSON object\");\n  } else {\n    if (typeof parsed.summary !== \"string\" ||\n        !parsed.summary.trim()) {\n      errors.push(\"Invalid summary\");\n    }\n\n    if (!Array.isArray(parsed.observations)) {\n      errors.push(\"Invalid observations\");\n    } else {\n      for (const observation of parsed.observations) {\n        if (\n          !observation ||\n          typeof observation.category !== \"string\" ||\n          typeof observation.description !== \"string\" ||\n          ![\"LOW\", \"MEDIUM\", \"HIGH\"].includes(\n            observation.severity\n          )\n        ) {\n          errors.push(\"Invalid observation structure\");\n          break;\n        }\n      }\n    }\n\n    if (!Array.isArray(parsed.missing_information)) {\n      errors.push(\"Invalid missing_information\");\n    }\n\n    if (!Array.isArray(parsed.supervisor_questions)) {\n      errors.push(\"Invalid supervisor_questions\");\n    }\n\n    if (parsed.requires_human_review !== true) {\n      errors.push(\"Human review must remain required\");\n    }\n\n    if (\n      Object.hasOwn(parsed, \"final_claim_decision\") &&\n      parsed.final_claim_decision !== null\n    ) {\n      errors.push(\"LLM cannot make final claim decisions\");\n    }\n  }\n\n  return {\n    json: {\n      llm_validation: {\n        valid: errors.length === 0,\n        errors,\n        validated_at: new Date().toISOString()\n      },\n      llm_analysis: errors.length === 0 ? parsed : null\n    }\n  };\n});\n"
+        "jsCode": "const item=$input.first().json,errors=[];let parsed;\ntry{const raw=item.text??item.output;parsed=typeof raw==='string'?JSON.parse(raw.trim().replace(/^```(?:json)?\\s*/i,'').replace(/\\s*```$/,'')):raw}catch{errors.push('INVALID_JSON')}\nconst keys=['summary','observations','missing_information','supervisor_questions','requires_human_review','final_claim_decision','claim_status_changed'];\nif(!parsed||typeof parsed!=='object'||Array.isArray(parsed))errors.push('OBJECT_REQUIRED');\nelse {\n if(keys.some(k=>!Object.hasOwn(parsed,k))||Object.keys(parsed).some(k=>!keys.includes(k)))errors.push('INVALID_KEYS');\n if(typeof parsed.summary!=='string'||!parsed.summary.trim()||parsed.summary.length>3000)errors.push('INVALID_SUMMARY');\n if(!Array.isArray(parsed.observations)||parsed.observations.length>5)errors.push('INVALID_OBSERVATIONS');\n else for(const o of parsed.observations)if(!o||typeof o.description!=='string'||!o.description.trim()||o.description.length>2000||!['CLAIM_CLARIFICATION','VERIFICATION_GAP','REPORTED_AMOUNT_DISCREPANCY','INPUT_INTEGRITY'].includes(o.category)||!['LOW','MEDIUM','HIGH'].includes(o.severity)){errors.push('INVALID_OBSERVATION');break}\n for(const key of ['missing_information','supervisor_questions'])if(!Array.isArray(parsed[key])||parsed[key].length>5||parsed[key].some(v=>typeof v!=='string'||!v.trim()||v.length>1000))errors.push('INVALID_'+key);\n if(parsed.requires_human_review!==true||parsed.final_claim_decision!==null||parsed.claim_status_changed!==false)errors.push('INVALID_DECISION_BOUNDARY');\n}\nreturn [{json:{llm_validation:{valid:!errors.length,errors,scope:'STRUCTURE_ONLY_NOT_FACT_VERIFICATION',validated_at:new Date().toISOString()},llm_analysis:errors.length?null:parsed,provider:item.provider==='LOCAL_RULES'?'LOCAL_RULES':'LLM'}}];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -776,7 +774,7 @@
     },
     {
       "parameters": {
-        "jsCode": "\nconst rules = $('Preliminary Analysis Engine').first().json;\nconst validation = $input.first().json;\n\nconst isValid =\n  validation.llm_validation?.valid === true &&\n  validation.llm_analysis !== null &&\n  typeof validation.llm_analysis === \"object\";\n\nconst ai = isValid ? validation.llm_analysis : null;\n\nconst findings = Array.isArray(rules.findings)\n  ? [...rules.findings]\n  : [];\n\nconst missingInformation = Array.isArray(rules.missing_information)\n  ? [...rules.missing_information]\n  : [];\n\nif (ai) {\n  for (const observation of ai.observations ?? []) {\n    findings.push({\n      code: \"AI_OBSERVATION\",\n      severity: observation.severity,\n      message: observation.description,\n      category: observation.category,\n      source: \"LLM\",\n      verification_status: \"UNVERIFIED\"\n    });\n  }\n\n  for (const missing of ai.missing_information ?? []) {\n    if (!missingInformation.includes(missing)) {\n      missingInformation.push(missing);\n    }\n  }\n} else {\n  findings.push({\n    code: \"AI_OUTPUT_VALIDATION_FAILED\",\n    severity: \"HIGH\",\n    message: \"LLM output could not be validated.\",\n    source: \"SYSTEM\"\n  });\n}\n\nconst summary = ai\n  ? ai.summary\n  : rules.summary;\n\nreturn [{\n  json: {\n    schema_version: \"1.0\",\n\n    job_id: rules.job_id,\n    claim_id: rules.claim_id,\n    claim_version: rules.claim_version,\n\n    analysis_type: \"HYBRID_RULES_AND_LLM\",\n    analysis_status: isValid\n      ? \"COMPLETED\"\n      : \"REQUIRES_REVIEW\",\n\n    summary,\n    findings,\n    missing_information: missingInformation,\n\n    supervisor_questions: ai?.supervisor_questions ?? [],\n\n    recommendation: \"REFER_TO_HUMAN_REVIEW\",\n    requires_human_review: true,\n\n    final_claim_decision: null,\n    claim_status_changed: false,\n\n    llm_validation: validation.llm_validation,\n\n    analyzed_at: new Date().toISOString()\n  }\n}];\n"
+        "jsCode": "const rules=$('Preliminary Analysis Engine').first().json;\nconst checked=$input.first().json,valid=checked.llm_validation?.valid===true,findings=[...(rules.findings??[])];\nif(!valid)findings.push({code:'REPORT_FORMAT_FAILED',severity:'MEDIUM',message:'تعذر التحقق من تنسيق التقرير؛ تم الاحتفاظ بنتائج القواعد.',source:'SYSTEM'});\n// The model's prose never upgrades facts/statuses. Only deterministic evidence-linked findings are authoritative here.\nreturn [{json:{...rules,analysis_type:checked.provider==='LOCAL_RULES'?'LOCAL_RULES_AND_DOCUMENT_EVIDENCE':'RULES_WITH_UNVERIFIED_ADVISORY',\n analysis_status:valid?'COMPLETED':'REQUIRES_REVIEW',summary:rules.summary,findings,\n advisory:checked.provider==='LLM'&&valid?{text:checked.llm_analysis.summary,verification_status:'UNVERIFIED',source:'LLM'}:null,\n supervisor_questions:valid?checked.llm_analysis.supervisor_questions:[],llm_validation:checked.llm_validation,\n requires_human_review:true,final_claim_decision:null,claim_status_changed:false}}];\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -789,28 +787,9 @@
     },
     {
       "parameters": {
-        "httpMethod": "POST",
-        "path": "insurance-claim-intake",
-        "options": {
-          "responseCode": {
-            "values": {}
-          }
-        }
-      },
-      "type": "n8n-nodes-base.webhook",
-      "typeVersion": 2.1,
-      "position": [
-        112,
-        560
-      ],
-      "id": "d26955c7-8fb0-40b6-9131-fe8ba6f269a6",
-      "name": "Webhook"
-    },
-    {
-      "parameters": {
         "mode": "raw",
         "jsonOutput": "={{ { ...$json.body, web_integration: $(\"Web App Intake\").isExecuted && $json.body.web_integration === true } }}",
-        "includeOtherFields": true,
+        "includeOtherFields": false,
         "options": {}
       },
       "type": "n8n-nodes-base.set",
@@ -917,8 +896,8 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [
-        112,
-        928
+        128,
+        752
       ]
     },
     {
@@ -943,7 +922,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const rules=$input.first().json;\nconst intake=$('Normalize Webhook Input').first().json;\nconst flags=intake.document_flags ?? [];\nreturn [{json:{text:JSON.stringify({summary:'Local preliminary checks completed. Document evidence and policy require supervisor verification.',observations:flags.map(f=>({category:'DOCUMENT_EVIDENCE',description:f,severity:'HIGH'})),missing_information:rules.missing_information,supervisor_questions:['Verify policy source and compare every flagged finding against its original document.'],requires_human_review:true,final_claim_decision:null})}}];"
+        "jsCode": "const rules=$input.first().json;\nreturn [{json:{provider:'LOCAL_RULES',text:JSON.stringify({summary:rules.summary,observations:[],missing_information:[],supervisor_questions:rules.findings?.length?['قارن الملاحظات بمصادرها الأصلية قبل تسجيل المراجعة.']:[],requires_human_review:true,final_claim_decision:null,claim_status_changed:false})}}];\n"
       },
       "id": "522d7faa-7e1f-44b5-a1e7-c165f89777d2",
       "name": "Local Advisory Analysis",
@@ -956,7 +935,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const intake=$('Normalize Webhook Input').first().json;\nif(!intake.web_integration)return [];\nlet analysis=null;\ntry {analysis=$('Merge Analysis Results').first().json;} catch(e) {}\nconst issues=intake.document_flags ?? [];\nconst result=analysis ? {...analysis,analysis_type:'LOCAL_RULES_AND_DOCUMENT_EVIDENCE'} : {summary:'Claim validation requires correction and supervisor review.',findings:[],missing_information:[],requires_human_review:true,final_claim_decision:null};\nconst validation=$('Validate Claim Data').first().json.validation;\nresult.extracted=intake.claim_data;\nresult.evidence=intake.evidence;\nresult.flags=[...issues,...(validation?.completeness?.missing_fields ?? []),...(result.findings ?? []).map(f=>f.message)];\nresult.claim_version=intake.claim_version;\nresult.field_sources=intake.field_sources ?? {};\nif (!analysis) { try {result.flags.push(...($('Prepare AI Input Review').first().json.review_reasons ?? []));} catch(e) {} }\nreturn [{json:{case_id:intake.case_id,job_id:intake.job_id,result}}];"
+        "jsCode": "const intake=$('Normalize Webhook Input').first().json;if(!intake.web_integration)return [];\nlet analysis=null;try{analysis=$('Merge Analysis Results').first().json}catch{}\ntry{const saved=$('Save Preliminary Analysis').first().json.analysis_payload;if(saved&&typeof saved==='object'&&Object.keys(saved).length)analysis=saved}catch{}\nconst validation=$('Validate Claim Data').first().json.validation;\nconst result=analysis?{...analysis}:{summary:'المطالبة تحتاج تصحيح بيانات قبل التحليل.',findings:[],missing_information:validation?.completeness?.missing_fields??[],analysis_status:'REQUIRES_REVIEW'};\nresult.extracted=intake.claim_data;result.evidence=intake.evidence;result.field_sources=intake.field_sources??{};result.field_quality=intake.field_quality??{};result.repair_items=intake.repair_items??[];\nresult.flags=[...new Set([...(intake.document_flags??[]),...(validation?.completeness?.missing_fields??[]),...(validation?.warnings??[])])];\nresult.claim_version=intake.claim_version;result.requires_human_review=true;result.final_claim_decision=null;result.claim_status_changed=false;\nreturn [{json:{case_id:intake.case_id,job_id:intake.job_id,result}}];\n"
       },
       "id": "59373939-b9bd-4723-bc39-e4244029d867",
       "name": "Prepare Web Result",
@@ -990,7 +969,92 @@
       ],
       "retryOnFail": true,
       "maxTries": 3,
-      "waitBetweenTries": 2000
+      "waitBetweenTries": 1500
+    },
+    {
+      "id": "2e8cd19e-13af-4965-b52e-d8e115c5c212",
+      "name": "Register Claim Execution",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        960
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8766/api/integrations/n8n/started",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ {intake:$json,execution_id:$execution.id,workflow_id:$workflow.id} }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "retryOnFail": true,
+      "maxTries": 2,
+      "waitBetweenTries": 1000
+    },
+    {
+      "id": "fdbea372-aeaf-4f37-b645-d51cf895074b",
+      "name": "Stop Conflicting Review Task",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        2416,
+        1280
+      ],
+      "parameters": {
+        "errorMessage": "Review task data conflict; existing record preserved. Refresh the claim version."
+      }
+    },
+    {
+      "id": "f39c45ad-32e6-4a57-8558-6f130264d0d9",
+      "name": "Workflow Readiness",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        128,
+        2752
+      ],
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "insurance-readiness",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "f593f9e3-0574-4303-9d47-63df4682554f",
+      "name": "Confirm Workflow Ready",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [
+        480,
+        2752
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\"ready\":true,\"revision\":\"reliability-v1\"}",
+        "options": {}
+      }
+    },
+    {
+      "id": "e377b9d2-6117-4c79-a5ce-83fa308864fd",
+      "name": "Reliability and source boundaries",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        2432
+      ],
+      "parameters": {
+        "content": "## Reliable processing\nRegister the reserved version; finish all review writes before delivering the result.\nOCR and local vision run in background preparation.\nRecorded checks are not coverage decisions. Read-only assistant is a separate workflow.",
+        "width": 650,
+        "height": 200
+      }
     }
   ],
   "connections": {
@@ -1034,11 +1098,6 @@
             "node": "Check Policy Review Required",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Prepare AI Analysis Request",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -1048,6 +1107,13 @@
         [
           {
             "node": "Prepare Policy Human Review",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare AI Analysis Request",
             "type": "main",
             "index": 0
           }
@@ -1067,12 +1133,24 @@
     },
     "Save Policy Review Task": {
       "main": [
-        []
+        [
+          {
+            "node": "Prepare AI Analysis Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Is Review Task Conflict": {
       "main": [
-        [],
+        [
+          {
+            "node": "Stop Conflicting Review Task",
+            "type": "main",
+            "index": 0
+          }
+        ],
         [
           {
             "node": "Is Review Task New?",
@@ -1173,11 +1251,6 @@
             "node": "Load Analysis For Review",
             "type": "main",
             "index": 0
-          },
-          {
-            "node": "Prepare Web Result",
-            "type": "main",
-            "index": 0
           }
         ]
       ]
@@ -1255,22 +1328,11 @@
         ]
       ]
     },
-    "Webhook": {
-      "main": [
-        [
-          {
-            "node": "Normalize Webhook Input",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
     "Normalize Webhook Input": {
       "main": [
         [
           {
-            "node": "Validate Claim Data",
+            "node": "Register Claim Execution",
             "type": "main",
             "index": 0
           }
@@ -1308,7 +1370,13 @@
             "index": 0
           }
         ],
-        []
+        [
+          {
+            "node": "Prepare AI Analysis Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Web App Intake": {
@@ -1383,15 +1451,51 @@
           }
         ]
       ]
+    },
+    "Register Claim Execution": {
+      "main": [
+        [
+          {
+            "node": "Validate Claim Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create AI Analysis Review Task": {
+      "main": [
+        [
+          {
+            "node": "Prepare Web Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Workflow Readiness": {
+      "main": [
+        [
+          {
+            "node": "Confirm Workflow Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "executionOrder": "v1",
     "binaryMode": "separate",
-    "availableInMCP": false
+    "availableInMCP": false,
+    "errorWorkflow": "d8455bca-ccfe-4f1c-bec2-94c581ab0f40"
   },
   "active": false,
   "pinData": {},
   "staticData": null,
-  "meta": {}
+  "meta": {
+    "templateWorkflowId": "twp5T9wAHIFHFsJs"
+  }
 }
