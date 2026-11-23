@@ -2,7 +2,7 @@ import os, json, sqlite3, uuid, hashlib, mimetypes, urllib.request
 from pathlib import Path
 from datetime import datetime, timezone
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote
 
 ROOT=Path(__file__).resolve().parents[1]
 DATA=Path(os.environ.get('INSURANCE_DATA_DIR',str(ROOT/'data')))
@@ -92,7 +92,7 @@ class Handler(BaseHTTPRequestHandler):
     if not r:return self.fail(404,'Case not found')
    if action=='documents':
     if r['status']!='draft':return self.fail(409,'Only drafts accept documents')
-    name=self.headers.get('X-Filename','document');name=Path(name).name[:120];ext=Path(name).suffix.lower()
+    name=unquote(self.headers.get('X-Filename','document')); name=Path(name).name[:120];ext=Path(name).suffix.lower()
     if ext not in ALLOWED:return self.fail(415,'Unsupported file extension')
     n=int(self.headers.get('Content-Length','0'))
     if not 0<n<=MAX_SIZE:return self.fail(413,'File must be 1 byte to 10 MB')

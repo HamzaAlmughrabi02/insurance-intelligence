@@ -25,3 +25,5 @@ jobs:
       - run: python test_v2_http.py
       - run: node test_v2_ui.js
       - run: node test_v2_workflows.js
+      - run: python test_workspace.py
+      - run: node test_workspace_ui.js

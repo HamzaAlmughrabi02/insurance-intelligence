@@ -17,9 +17,10 @@ def req(path,obj=None,headers=None):
 checks=[]
 def check(name,value):assert value,name;checks.append(name);print('PASS',name)
 try:
+ check('workspace_requires_account',req('/api/workspace/cases')[0]==401)
  check('report_requires_account',req('/api/cases/missing/report')[0]==401)
  ticket=app.auth_sessions.issue_setup_invite();code,session=req('/api/auth/setup',{'username':'qa-v2-owner','password':secrets.token_urlsafe(24),'setup_ticket':ticket});assert code==201;csrf=session['csrf']
- _,c=req('/api/cases',{'kind':'motor','client':'QA SYNTHETIC'});case=c['id'];text='Invoice\nDoor JOD 100';d={'document_id':'qa-document','name':'invoice.pdf','page_count':1,'pages':[{'page':1,'text':text,'method':'native_pdf'}],'uncertainties':[]}
+ _,c=req('/api/cases',{'kind':'motor','client':'QA SYNTHETIC'});case=c['id'];check('workspace_lists_draft',req('/api/workspace/cases')[1]['items'][0]['display_status']=='DRAFT');check('workspace_missing_case',req('/api/workspace/cases/missing/state')[0]==404);text='Invoice\nDoor JOD 100';d={'document_id':'qa-document','name':'invoice.pdf','page_count':1,'pages':[{'page':1,'text':text,'method':'native_pdf'}],'uncertainties':[]}
  result={'claim_version':1,'evidence':[d],'extracted':{}};report=eng.prepare(case,1,result);packet=eng.analyst_packet(report)
  with app.base.conn() as db:
   db.execute('INSERT INTO corrections VALUES(?,?,?)',(case,1,'{}'));db.execute("UPDATE cases SET status='review',result=? WHERE id=?",(json.dumps(result),case))

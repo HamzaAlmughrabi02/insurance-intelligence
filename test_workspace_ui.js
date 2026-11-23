@@ -1,0 +1,11 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert');
+const nodes=new Map();const $=id=>{if(!nodes.has(id))nodes.set(id,{innerHTML:'',textContent:'',classList:{add(){},remove(){}},querySelectorAll(){return []},addEventListener(){}});return nodes.get(id)};
+const ctx=vm.createContext({$,document:{getElementById:$,addEventListener(){},querySelectorAll(){return []}},window:{addEventListener(){}},bootAccount(){},console,URLSearchParams,history:{},location:{},setTimeout(){},clearTimeout(){}});
+for(const name of ['workspace-state.js','report-views.js','workspace-ui.js'])vm.runInContext(fs.readFileSync(__dirname+'/'+name,'utf8'),ctx);
+const run=s=>vm.runInContext(s,ctx);
+assert.equal(run("parseRoute('#review/QA').id"),'QA');assert.equal(run("parseRoute('#review').filter"),'review');assert.equal(run("parseRoute('#/cases/QA?section=evidence&version=1').version"),1);assert.equal(run("parseRoute('#/cases/QA?section=invalid').section"),'report');assert.equal(run("parseRoute('#/cases').type"),'list');assert(!run("routeURL({type:'case',id:'QA',section:'history',version:1})").includes('undefined'));
+run("accountSession={user:{role:'admin'}};caseData={id:'QA',status:'review',current_version:2};caseState={pending_tasks:2,can_approve:false,can_record_nonapproval:true,report_status:'completed',next_action:'FOLLOWUP'};v2State={version:2,is_current:true,report:{}};currentId='QA';renderCaseActions()");
+assert($('case-actions').innerHTML.includes('استكمال المتطلبات (2)'));assert(!$('case-actions').innerHTML.includes('>تسجيل نتيجة المراجعة</button>'));
+run("v2State.is_current=false;renderCaseActions()");assert($('case-actions').innerHTML.includes('العودة للإصدار الحالي'));assert(!$('case-actions').innerHTML.includes('تصحيح البيانات'));
+run("newDraft.client='C-001';newDraft.clients[encodeURIComponent('ملف')]='C-002'");assert.equal(run("groupClient('ملف')"),'C-002');
+console.log('Workspace UI: routes, explicit selection, version pinning, action guardrails and batch reference preservation passed.');

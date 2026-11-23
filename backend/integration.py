@@ -8,6 +8,7 @@ import document_reader
 import quality
 import reliability
 import v2_reports
+import workspace_api
 from pypdf import PdfReader
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -23,6 +24,7 @@ _dbsettings=dict(line.split('=',1) for line in _envfile.read_text().splitlines()
 DATABASE_PORT=int(_dbsettings.get('POSTGRES_PORT','5433'))
 reliability.BASE=base;reliability.CFG=cfg
 v2_reports.configure(base,cfg)
+workspace_api.configure(base)
 base.DATA=Path(os.environ.get('INSURANCE_DATA_DIR',str(ROOT/'data')));base.DB=base.DATA/'app.sqlite3';base.UPLOADS=base.DATA/'uploads'
 
 def init():
@@ -148,7 +150,7 @@ def build(case_id,version,fields):
   else:field_sources[key]=[{'document_id':e['document_id'],'page':p['page']} for e in evidence for p in e['pages'] if str(value) and str(value) in p['text']]
  return {'schema_version':'1.0','event_id':job,'event_type':'claim.submitted','job_id':job,'claim_id':case_id,'claim_version':version,'correlation_id':job,'occurred_at':base.now(),'claim_data':claim,'web_integration':True,'case_id':case_id,'evidence':evidence,'document_flags':flags,'field_sources':field_sources,'field_quality':quality.field_quality(claim,choices,fields),'document_findings':document_findings,'repair_items':repair_items}
 
-class Handler(v2_reports.ReportMixin,reliability.ReliabilityMixin,auth_sessions.AuthMixin,base.Handler):
+class Handler(workspace_api.WorkspaceMixin,v2_reports.ReportMixin,reliability.ReliabilityMixin,auth_sessions.AuthMixin,base.Handler):
  def body(self):
   if hasattr(self,'_v2_cached_body'):return self._v2_cached_body
   try:
