@@ -12,3 +12,15 @@ run("v2ChooseTab('history')");assert($('v2-report').innerHTML.includes('POL-OLD'
 run("v2ChooseTab('coverage')");assert($('v2-report').innerHTML.includes('قراءة جزئية'));assert($('v2-report').innerHTML.includes('اقتراح آلي'));
 run("v2State.status='running';v2State.report=null;v2State.stage='VERIFIER';renderV2Report()");assert($('v2-report').innerHTML.includes('تدقيق المعنى'));assert(!$('v2-report').innerHTML.includes('99%'));
 console.log('V2 UI: 16 assertions passed: report navigation, escaping, coverage, exact source links, version history and real stages.');
+
+// Regression: the UI must mirror approval gates and display the requested evidence snapshot.
+const approve={disabled:false,title:'',getAttribute(){return "decide('QA','approve')"}},reject={disabled:false,title:'',getAttribute(){return "decide('QA','reject')"}};
+ctx.document.querySelectorAll=selector=>selector==='#review-resolution button'?[approve,reject]:[];
+run("v2State=fixture;v2State.is_current=true;v2State.status='completed';v2SyncReviewControls()");assert(approve.disabled);assert(!reject.disabled);assert(approve.title.includes('الاستكمال'));
+run("v2State.tasks=[];v2State.role_changes_pending=true;v2SyncReviewControls()");assert(approve.disabled);assert(approve.title.includes('تصنيفها'));
+run("v2State.role_changes_pending=false;v2SyncReviewControls()");assert(!approve.disabled);
+ctx.evidenceReview={case_id:'QA',case:{result:{evidence:[{document_id:'doc',pages:[{text:'CURRENT'}]}]}},evidence:[]};ctx.renderEvidenceWorkspace=()=>{};
+ctx.snapshotHistory=[{version:1,result:JSON.stringify({evidence:[{document_id:'doc',pages:[{text:'HISTORICAL'}]}]})}];
+run("v2RestoreEvidenceSnapshot({case_id:'QA',version:1,is_current:false},snapshotHistory)");assert.equal(ctx.evidenceReview.evidence[0].pages[0].text,'HISTORICAL');
+run("v2RestoreEvidenceSnapshot({case_id:'QA',version:2,is_current:true})");assert.equal(ctx.evidenceReview.evidence[0].pages[0].text,'CURRENT');
+console.log('Release regressions: approval gates, historic evidence and current snapshot restoration passed.');

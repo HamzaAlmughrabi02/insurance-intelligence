@@ -34,7 +34,7 @@ async function submitAccount(event){
  }catch(e){$('account-error').textContent=e.message;button.disabled=false}
 }
 async function enterAccount(session){
- accountSession=session;token='';connected=true;cases=[];logs=[];files=[];currentId='';page='home';
+ intakeDraft={client:'',notes:''};pendingIntake.clear();accountSession=session;token='';connected=true;cases=[];logs=[];files=[];currentId='';page='home';
  await refresh();document.body.classList.remove('auth-pending');$('account-entry')?.remove();render();startPolling();checkServices();
  clearInterval(servicesTimer);servicesTimer=setInterval(checkServices,10000);
 }
@@ -47,7 +47,7 @@ api=async function(path,method='GET',body=null,headers={}){
  if(!response.ok)throw Error(data.error||'تعذر إتمام الطلب');return data;
 };
 disconnect=async function(){
- try{await authRequest('logout',{});showAccountEntry()}catch(e){toast('تعذر تسجيل الخروج؛ حاول مجددًا.')}
+ try{await authRequest('logout',{});intakeDraft={client:'',notes:''};pendingIntake.clear();files=[];showAccountEntry()}catch(e){toast('تعذر تسجيل الخروج؛ حاول مجددًا.')}
 };
 connect=function(){showAccountEntry()};
 settingsPage=function(){return `<div class="two"><section class="card"><h2>الحساب</h2><div class="kv"><span>اسم المستخدم</span><b>${esc(accountSession?.user.username||'')}</b></div><div class="kv"><span>الصلاحية</span><b>${accountSession?.user.role==='admin'?'مدير ومراجع':'مشغل'}</b></div><p class="muted" style="margin:16px 0">يُحفظ دخولك بجلسة خاصة بهذا المتصفح. رموز الربط الداخلية لا تحتاج إلى إدخالها هنا.</p><button class="ghost" onclick="disconnect()">تسجيل الخروج</button></section><section class="card"><h2>جاهزية المعالجة</h2><div id="services-status" class="notice">جارٍ التحقق من الخدمات المحلية…</div><p class="muted" style="margin-top:15px">الاستخدام مخصص لهذا الكمبيوتر. تظل النتيجة الأولية بحاجة إلى مراجعتك.</p></section></div>`};
@@ -57,7 +57,7 @@ async function checkServices(){
  if(!accountSession)return;
  try{
   const status=await api('/system/status');
-  const detail=status.ready?'الخدمات المحلية متاحة لاستقبال المطالبات.':!status.n8n_reachable?'جارٍ انتظار تشغيل محرك المعالجة n8n…':!status.database_port_reachable?'قاعدة بيانات المعالجة غير متاحة بعد…':'رابط استقبال الوركفلو غير جاهز؛ تحقق من نشره وتشغيله في n8n.';
+  const detail=status.ready?'الخدمات المحلية متاحة لاستقبال المطالبات.':!status.n8n_reachable?'جارٍ انتظار تشغيل محرك المعالجة n8n…':!status.database_port_reachable?'قاعدة بيانات المعالجة غير متاحة بعد…':!status.document_reader_reachable?'قارئ الصور والمستندات غير متاح. افتح اختصار IntelliSure V2 لإعادة تشغيله.':'رابط استقبال الوركفلو غير جاهز؛ تحقق من نشره وتشغيله في n8n.';
   if($('services-status'))$('services-status').textContent=detail;
   if($('submit')){$('submit').disabled=!status.ready||busy;$('submit').title=detail}
  }catch{}

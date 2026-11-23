@@ -2,7 +2,7 @@
 
 Run with the optional .ocr-venv interpreter. Original uploads are read-only.
 """
-import base64, io, json, os, re, secrets, sqlite3, threading, urllib.request
+import base64, io, json, os, re, secrets, sqlite3, threading, urllib.request, subprocess, sys, contextlib, time
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -11,7 +11,7 @@ os.environ.setdefault('PADDLE_HOME', str(ROOT / '.cache/paddle'))
 os.environ.setdefault('PADDLE_PDX_CACHE_HOME', str(ROOT / '.cache/paddlex'))
 os.environ.setdefault('HF_HOME', str(ROOT / '.cache/huggingface'))
 os.environ.setdefault('PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK', 'True')
-os.environ.setdefault('OMP_NUM_THREADS', '4')
+os.environ.setdefault('OMP_NUM_THREADS', '1')
 os.environ.setdefault('FLAGS_enable_pir_api', '1')
 LOCK = threading.Lock()
 ENGINES = {}
@@ -70,6 +70,8 @@ def page_image(path, page):
 
 def recognize(image, lang):
     import numpy as np
+    import cv2
+    cv2.setNumThreads(1)
     from paddleocr import PaddleOCR
     lang = 'ar' if lang == 'ar' else 'en'
     if lang not in ENGINES:
@@ -77,7 +79,7 @@ def recognize(image, lang):
             text_detection_model_name='PP-OCRv5_mobile_det',
             text_recognition_model_name='arabic_PP-OCRv5_mobile_rec' if lang=='ar' else 'en_PP-OCRv5_mobile_rec',
             use_doc_orientation_classify=False, use_doc_unwarping=False,
-            use_textline_orientation=False, enable_mkldnn=False, cpu_threads=4)
+            use_textline_orientation=False, enable_mkldnn=False, cpu_threads=1)
     result = list(ENGINES[lang].predict(np.array(image)))
     blocks = []
     for item in result:
@@ -118,6 +120,36 @@ def recognize(image, lang):
         'method': 'paddleocr', 'engine': 'PP-OCRv5-' + lang,
         'confidence': round(sum(b['confidence'] for b in blocks) / len(blocks), 4) if blocks else 0}
 
+def recognize_isolated(path, page, lang):
+    # Inference allocations are returned to Windows after every page, including failures.
+    # Only the authenticated, validated local document path reaches this child process.
+    # Reports and OCR share this computer's RAM. Finish an active V2 report first,
+    # then release its idle vision model before loading the OCR inference runtime.
+    deadline=time.monotonic()+30
+    while True:
+        with sqlite3.connect((DATA/'app.sqlite3').as_uri()+'?mode=ro', uri=True) as c:
+            active=c.execute("SELECT 1 FROM report_runs WHERE status='running' LIMIT 1").fetchone()
+        if not active:break
+        if time.monotonic()>deadline:raise RuntimeError('LOCAL_MODEL_BUSY')
+        time.sleep(.5)
+    try:
+        with urllib.request.urlopen('http://127.0.0.1:11434/api/ps',timeout=3) as response:
+            loaded=json.load(response).get('models',[])
+        if any(m.get('name')==MODEL for m in loaded):
+            req=urllib.request.Request('http://127.0.0.1:11434/api/generate',
+                data=json.dumps({'model':MODEL,'keep_alive':0}).encode(),
+                headers={'Content-Type':'application/json'})
+            with urllib.request.urlopen(req,timeout=15) as response:response.read()
+    except urllib.error.URLError:
+        pass  # OCR itself does not require the vision model service.
+    run = subprocess.run([sys.executable, str(Path(__file__).resolve()), '--ocr-worker',
+        str(path), str(page), 'ar' if lang == 'ar' else 'en'], capture_output=True,
+        timeout=120, creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+    if run.returncode:
+        (ROOT/'document-reader-worker.stderr.log').write_bytes(run.stderr[-16000:])
+        raise RuntimeError('OCR_WORKER_FAILED')
+    return json.loads(run.stdout.decode('utf-8'))
+
 def understand(image, text):
     # Fixed loopback URL and local model only. No tools, cloud endpoints or document instructions.
     image.thumbnail((1400, 1800))
@@ -135,7 +167,7 @@ def understand(image, text):
         'Supporting extracted text:\n' + str(text)[:10000])
     payload = {'model': MODEL, 'stream': False, 'think': False, 'format': schema,
         'messages': [{'role': 'user', 'content': prompt, 'images': [base64.b64encode(buf.getvalue()).decode()]}],
-        'options': {'temperature': 0, 'num_ctx': 4096, 'num_predict': 2400}, 'keep_alive': '2m'}
+        'options': {'temperature': 0, 'num_ctx': 4096, 'num_predict': 2400}, 'keep_alive': 0}
     req = urllib.request.Request('http://127.0.0.1:11434/api/chat', data=json.dumps(payload).encode(),
         headers={'Content-Type': 'application/json'})
     with urllib.request.urlopen(req, timeout=150) as response:
@@ -172,11 +204,14 @@ class Handler(BaseHTTPRequestHandler):
             body = json.loads(self.rfile.read(size))
             path = document(body['document_id'])
             with LOCK:
-                image = page_image(path, body.get('page', 1))
-                try:
-                    result = recognize(image, body.get('lang', 'ar')) if self.path == '/ocr' else understand(image, body.get('text', ''))
-                finally:
-                    image.close()
+                if self.path == '/ocr':
+                    result = recognize_isolated(path, body.get('page', 1), body.get('lang', 'ar'))
+                else:
+                    image = page_image(path, body.get('page', 1))
+                    try:
+                        result = understand(image, body.get('text', ''))
+                    finally:
+                        image.close()
             self.reply(200, result)
         except (ValueError, KeyError, TypeError):
             self.reply(422, {'error': 'Invalid document or request'})
@@ -186,6 +221,16 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(503, {'error': 'Document engine unavailable'})
 
 if __name__ == '__main__':
+    if len(sys.argv) == 5 and sys.argv[1] == '--ocr-worker':
+        # Third-party progress belongs on stderr; stdout is an exact JSON contract.
+        with contextlib.redirect_stdout(sys.stderr):
+            image = page_image(Path(sys.argv[2]), int(sys.argv[3]))
+            try:
+                result = recognize(image, sys.argv[4])
+            finally:
+                image.close()
+        sys.stdout.buffer.write(json.dumps(result, ensure_ascii=False).encode('utf-8'))
+        sys.exit(0)
     port=int(os.environ.get('INSURANCE_READER_PORT','8787'))
     print('V2 document reader: http://127.0.0.1:'+str(port), flush=True)
     ThreadingHTTPServer(('127.0.0.1',port), Handler).serve_forever()

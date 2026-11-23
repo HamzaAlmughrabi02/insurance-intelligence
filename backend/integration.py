@@ -198,7 +198,7 @@ class Handler(workspace_api.WorkspaceMixin,v2_reports.ReportMixin,reliability.Re
    try:
     with urllib.request.urlopen('http://127.0.0.1:8787/health',timeout=1) as response:reader=response.status==200
    except Exception:pass
-   return self.reply(200,{'n8n_reachable':n8n,'database_port_reachable':database,'document_reader_reachable':reader,'workflow_ready':workflow_ready,'ready':n8n and database and workflow_ready})
+   return self.reply(200,{'n8n_reachable':n8n,'database_port_reachable':database,'document_reader_reachable':reader,'workflow_ready':workflow_ready,'ready':n8n and database and workflow_ready and reader})
   if p.startswith('/api/cases/') and p.rsplit('/',1)[-1] in ('jobs','history'):
    if not self.auth():return
    table='integration_jobs' if p.endswith('/jobs') else 'result_history'
@@ -276,6 +276,7 @@ class Handler(workspace_api.WorkspaceMixin,v2_reports.ReportMixin,reliability.Re
     version=previous['version']+1 if previous else 1
     fields=json.loads(previous['fields']) if previous else {}
     if action=='reanalyze':
+     if 'version' in o and (type(o['version']) is not int or not previous or o['version']!=previous['version']):return self.fail(409,'Stale case version')
      if not str(o.get('note','')).strip():return self.fail(400,'Correction reason required')
      changes=o.get('fields',{})
      allowed={'policy_number','accident_date','vehicle_plate','incident_description','claim_type'}

@@ -8,7 +8,7 @@ renderDetail=function(c){
  let r={};try{r=typeof c.result==='string'?JSON.parse(c.result):c.result||{}}catch{}
  const fields=r.extracted||c.failed_fields||{};
  const labels={policy_number:'رقم الوثيقة',accident_date:'تاريخ الحادث (YYYY-MM-DD)',vehicle_plate:'رقم المركبة',claim_type:'نوع المطالبة',incident_description:'وصف الحادث'};
- html+=`<details style="margin-top:24px"><summary>تصحيح البيانات وإعادة التحليل</summary><p class="muted">يُحفظ التصحيح بإصدار جديد وسبب مكتوب، وتبقى الأدلة والنتائج السابقة محفوظة.</p><form id="correction-form" onsubmit="reanalyzeCase(event,'${esc(c.id)}')"><div class="formrow">${Object.entries(labels).map(([key,label])=>`<label class="field ${key==='incident_description'?'wide':''}">${label}<input name="${key}" value="${esc(fields[key]||'')}" ${key==='accident_date'?'type="date"':''} maxlength="${key==='incident_description'?10000:150}" required></label>`).join('')}<label class="field wide">سبب التصحيح أو إعادة التحقق<textarea name="reason" required maxlength="2000" rows="3"></textarea></label></div><button class="primary" type="submit">حفظ التصحيح وإعادة التحليل</button></form></details>`;
+ html+=`<details style="margin-top:24px"><summary>تصحيح البيانات وإعادة التحليل</summary><p class="muted">يُحفظ التصحيح بإصدار جديد وسبب مكتوب، وتبقى الأدلة والنتائج السابقة محفوظة.</p><form id="correction-form" onsubmit="reanalyzeCase(event,'${esc(c.id)}')"><div class="formrow">${Object.entries(labels).map(([key,label])=>`<label class="field ${key==='incident_description'?'wide':''}">${label}<input name="${key}" value="${esc(fields[key]||'')}" ${key==='accident_date'?'type="date"':''} maxlength="${key==='incident_description'?10000:150}"></label>`).join('')}<label class="field wide">سبب التصحيح أو إعادة التحقق<textarea name="reason" required maxlength="2000" rows="3"></textarea></label></div><button class="primary" type="submit">حفظ التصحيح وإعادة التحليل</button></form></details>`;
  return html;
 };
 loadDetail=async function(id){
@@ -35,10 +35,11 @@ async function downloadEvidence(id,name){
 }
 async function reanalyzeCase(event,id){
  event.preventDefault();const form=event.currentTarget,button=form.querySelector('button[type="submit"]');
- const data=new FormData(form),fields=Object.fromEntries([...data.entries()].filter(([key])=>key!=='reason'));
+ if(!evidenceReview||evidenceReview.case_id!==id||v2State?.is_current===false){toast('افتح الإصدار الحالي قبل التصحيح.');return}
+ const data=new FormData(form),original=reviewResult(evidenceReview.case).extracted||evidenceReview.case.failed_fields||{},fields=Object.fromEntries([...data.entries()].filter(([key,value])=>key!=='reason'&&String(value)!==String(original[key]||'')));
  button.disabled=true;
  try{
-  await api('/cases/'+encodeURIComponent(id)+'/reanalyze','POST',{fields,note:data.get('reason')},{'X-Role':'supervisor'});
+  await api('/cases/'+encodeURIComponent(id)+'/reanalyze','POST',{fields,note:data.get('reason'),version:evidenceReview.case.current_version},{'X-Role':'supervisor'});
   currentId=id;await refresh();render();startPolling();toast('حُفظ التصحيح وبدأ إصدار تحليل جديد');
  }catch(e){button.disabled=false;toast(e.message)}
 }
@@ -62,3 +63,9 @@ startPolling=function(){
   }catch{}
  },3000);
 };
+
+// Preserve intake text across file-picker rerenders; retries reuse the saved draft.
+let intakeDraft={client:'',notes:''},pendingIntake=new Map();
+const intakeHome=home;
+home=function(){return intakeHome().replace('id="client"','id="client" value="'+esc(intakeDraft.client)+'"').replace('placeholder="اختياري"></textarea>','placeholder="اختياري">'+esc(intakeDraft.notes)+'</textarea>')};
+document.addEventListener('input',event=>{if(page==='home'&&['client','notes'].includes(event.target.id))intakeDraft[event.target.id]=event.target.value});

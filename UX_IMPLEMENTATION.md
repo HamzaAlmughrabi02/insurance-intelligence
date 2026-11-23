@@ -1,6 +1,6 @@
 # Active design: original V2 interface
 
-The previous V2 design was restored at the user request. `index.html`, `build_ui.py` and the compiled account UI regression test match commit `3fac8481d40f253a192b82de50f415f1cac71da3`. The experimental workspace modules remain inactive for reference. No case data, workflow or analysis logic was reverted.
+The previous V2 design was restored at the user request. Its CSS and layout remain the active design baseline from commit `3fac8481d40f253a192b82de50f415f1cac71da3`. Functional release fixes are documented in [RELEASE_ACCEPTANCE_AR.md](RELEASE_ACCEPTANCE_AR.md). The experimental workspace modules remain inactive for reference. No case data or original workflow was reverted.
 
 ---
 

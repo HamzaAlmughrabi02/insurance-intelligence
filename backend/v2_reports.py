@@ -45,7 +45,9 @@ def enqueue():
 def once():
  enqueue()
  with BASE.conn() as c:
-  c.execute('BEGIN IMMEDIATE');r=c.execute("SELECT * FROM report_runs WHERE status='queued' ORDER BY rowid LIMIT 1").fetchone()
+  c.execute('BEGIN IMMEDIATE')
+  if c.execute("SELECT 1 FROM document_preparations WHERE status='running' LIMIT 1").fetchone():return
+  r=c.execute("SELECT * FROM report_runs WHERE status='queued' ORDER BY rowid LIMIT 1").fetchone()
   if not r:return
   if r['version']!=current(c,r['case_id']):c.execute("UPDATE report_runs SET status='superseded' WHERE id=?",(r['id'],));return
   c.execute("UPDATE report_runs SET status='running',stage='ANALYST',attempts=attempts+1,updated_at=? WHERE id=?",(BASE.now(),r['id']))
@@ -158,8 +160,9 @@ class ReportMixin:
      v=current(c,case);r=c.execute("SELECT status,created_at FROM report_runs WHERE case_id=? AND version=?",(case,v)).fetchone()
      pending=c.execute("SELECT 1 FROM followup_tasks WHERE case_id=? AND version=? AND state IN ('OPEN','IN_PROGRESS') LIMIT 1",(case,v)).fetchone()
      roles=c.execute('SELECT MAX(updated_at) FROM document_roles WHERE case_id=?',(case,)).fetchone()[0]
+     additions=c.execute("SELECT MAX(created_at) FROM audit WHERE case_id=? AND action='supplement_uploaded'",(case,)).fetchone()[0]
     if not r or r['status']!='completed':return self.fail(409,'Wait for the checked V2 report before recording review')
-    if obj.get('decision')=='approve' and (pending or (roles and roles>r['created_at'])):return self.fail(409,'Complete or explicitly waive follow-up tasks and reanalyze role changes before approval')
+    if obj.get('decision')=='approve' and (pending or max(roles or '',additions or '')>r['created_at']):return self.fail(409,'Complete or explicitly waive follow-up tasks and reanalyze role changes before approval')
     return super().do_POST()
    if not self.auth('supervisor'):return
    if action=='supplements':return self.supplement(case)
