@@ -4,20 +4,20 @@ async function scenario(configured){
  const nodes=new Map(),requests=[];
  function element(){return {value:'',innerHTML:'',textContent:'',disabled:false,classList:{add(){},remove(){}},addEventListener(){},setAttribute(){},remove(){}}}
  const document={querySelector(){return null},querySelectorAll(){return []},getElementById(id){if(!nodes.has(id))nodes.set(id,element());return nodes.get(id)},addEventListener(){},createElement:element,body:{classList:{add(){},remove(){}},append(){}}};
- const context=vm.createContext({document,window:{scrollTo(){},addEventListener(){}},location:{hash:configured?'':'#setup=synthetic-invite',pathname:'/',search:''},history:{replaceState(){},pushState(){}},URLSearchParams,setTimeout(){},setInterval(){},clearInterval(){},clearTimeout(){},console,Blob,fetch:async(url,options={})=>{
-  requests.push({url,options});const data=url.endsWith('/auth/status')?{setup_required:!configured}:url.endsWith('/auth/session')?{user:{username:'qa-owner',role:'admin'},csrf:'synthetic-csrf'}:url==='/api/workspace/cases'?{items:[],updated_at:'2026-11-24T00:00:00Z'}:url==='/api/cases'&&(!options.method||options.method==='GET')?[]:url.endsWith('/system/status')?{ready:true}:{};
+ const context=vm.createContext({document,window:{scrollTo(){},addEventListener(){}},location:{hash:configured?'':'#setup=synthetic-invite',pathname:'/',search:''},history:{replaceState(){},pushState(){}},URLSearchParams,setTimeout(){},setInterval(){},clearInterval(){},console,Blob,fetch:async(url,options={})=>{
+  requests.push({url,options});const data=url.endsWith('/auth/status')?{setup_required:!configured}:url.endsWith('/auth/session')?{user:{username:'qa-owner',role:'admin'},csrf:'synthetic-csrf'}:url==='/api/cases'&&(!options.method||options.method==='GET')?[]:url.endsWith('/system/status')?{ready:true}:{};
   return {ok:true,status:200,json:async()=>data};
  }});
  Object.defineProperty(context,'localStorage',{get(){throw Error('Credentials must not use localStorage')}});
  Object.defineProperty(context,'sessionStorage',{get(){throw Error('Credentials must not use sessionStorage')}});
  for(const [,source] of html.matchAll(/<script>([\s\S]*?)<\/script>/g))vm.runInContext(source,context);
  await new Promise(resolve=>setImmediate(resolve));
- if(!configured){assert(nodes.get('account-entry').innerHTML.includes('أنشئ حسابك المحلي'));assert(nodes.get('account-entry').innerHTML.includes('confirmation'))}
+ if(!configured){assert(nodes.get('account-entry').innerHTML.includes('إنشاء حسابك'));assert(nodes.get('account-entry').innerHTML.includes('confirmation'))}
  else{
   await vm.runInContext("api('/cases','POST',{kind:'motor',client:'synthetic'})",context);
   const call=requests.at(-1);assert.equal(call.options.credentials,'same-origin');assert.equal(call.options.headers['X-CSRF-Token'],'synthetic-csrf');assert(!('Authorization' in call.options.headers));
-  assert(vm.runInContext('accountPage()',context).includes('تسجيل الخروج'));
-  assert(!vm.runInContext('accountPage()',context).includes('id="token"'));
+  assert(vm.runInContext('settingsPage()',context).includes('تسجيل الخروج'));
+  assert(!vm.runInContext('settingsPage()',context).includes('id="token"'));
  }
  return true;
 }

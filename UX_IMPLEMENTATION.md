@@ -1,3 +1,11 @@
+# Active design: original V2 interface
+
+The previous V2 design was restored at the user request. `index.html`, `build_ui.py` and the compiled account UI regression test match commit `3fac8481d40f253a192b82de50f415f1cac71da3`. The experimental workspace modules remain inactive for reference. No case data, workflow or analysis logic was reverted.
+
+---
+
+The following describes the inactive experiment:
+
 # V2 case workspace
 
 The case list now identifies the client, current version, review reason and next action. A single case route serves entry from every list or legacy review link. Its four sections are Report, Evidence, Follow-up and History. Source text, exact quotations and original PDF/image previews open beside the report.
