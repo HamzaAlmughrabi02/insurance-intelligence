@@ -3,6 +3,341 @@
   "nodes": [
     {
       "parameters": {
+        "content": "# 01 — Claim intake\n\nReceive the claim from the platform or legacy webhook. Validate the required data, save valid intake, or route missing information to review.",
+        "height": 2350,
+        "width": 1460,
+        "color": 5
+      },
+      "id": "bb3120c7-5975-4ae5-a2b6-4f4a80943168",
+      "name": "Sticky Note2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# 02 — Policy verification\n\nLook up the policy record and check its status, source and dates. Create a review task when needed without silently duplicating or replacing conflicting tasks.",
+        "height": 2090,
+        "width": 1400,
+        "color": 4
+      },
+      "id": "af8641b3-55d4-4537-bad1-cc376980ca93",
+      "name": "Sticky Note3",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1552,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# 03 — Analysis input\n\nCombine claim context with policy verification. Check the analysis payload before continuing; invalid input becomes a review task.",
+        "height": 2060,
+        "width": 1040,
+        "color": 3
+      },
+      "id": "47b589a8-91f1-49ab-856c-41395ff4059a",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3088,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# 04 — Preliminary analysis\n\nRun deterministic checks, then choose the local platform report or the alternative LLM report. Validate and merge the output; human review remains required.",
+        "height": 1610,
+        "width": 1680,
+        "color": 6
+      },
+      "id": "7ea0b384-ec04-4829-923b-bda56fc2b6b4",
+      "name": "Sticky Note1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4272,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# 05 — Save and review\n\nPersist the analysis against its claim, job and version. Prepare the human review task while the platform result follows a separate branch.",
+        "height": 1610,
+        "width": 1070,
+        "color": 7
+      },
+      "id": "9473c944-88b2-4c93-90c4-f0ca7f1821d5",
+      "name": "Section 05",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        6080,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "content": "# 06 — Platform callback\n\nPackage the analysis or validation outcome with its evidence. Return it to the platform using the internal callback credential.",
+        "height": 710,
+        "width": 1000,
+        "color": 2
+      },
+      "id": "e23787a6-b8ce-46e8-b948-aef9a5a8fa50",
+      "name": "Section 06",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        7312,
+        1648
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 1.1 Entry points\n\nPlatform: authenticated web intake. Legacy: existing integration endpoint.",
+        "height": 170,
+        "width": 270,
+        "color": 7
+      },
+      "id": "34766753-012d-4e8d-993e-b2369df71d2d",
+      "name": "Guide — 1.1 Entry points",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        48,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 1.2 Normalize and validate\n\nFlatten the request body and check required fields, event metadata and dates. Valid data continues; incomplete data branches down.",
+        "height": 150,
+        "width": 710,
+        "color": 7
+      },
+      "id": "b1b62cbd-2820-4950-ae18-0be25f077977",
+      "name": "Guide — 1.2 Normalize and validate",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        336,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 1.3 Save valid intake\n\nPrepare the validated event and persist the initial claim. Repeated claim numbers return a row without replacing the original fields.",
+        "height": 170,
+        "width": 390,
+        "color": 7
+      },
+      "id": "39b0d52d-0a97-4afa-a5fc-2614b4eaf209",
+      "name": "Guide — 1.3 Save valid intake",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1056,
+        416
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 1.4 Missing-data review\n\nTurn missing fields and warnings into a DATA_VALIDATION task. Save it once per job and return a review result to the platform.",
+        "height": 150,
+        "width": 610,
+        "color": 7
+      },
+      "id": "bb7d7795-b10a-4d9b-8416-39cab937fd13",
+      "name": "Guide — 1.4 Missing-data review",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        800,
+        1024
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 2.1 Policy lookup and checks\n\nFind the database policy and assess source verification, status and the accident date. No match is a review reason, not a claim denial.",
+        "height": 150,
+        "width": 1270,
+        "color": 7
+      },
+      "id": "098c47c0-7d11-4b4b-9710-12a3142214f5",
+      "name": "Guide — 2.1 Policy lookup and checks",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1600,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 2.2 Policy review request\n\nPrepare a POLICY_VERIFICATION task and compare it with any existing task for the same job.",
+        "height": 140,
+        "width": 800,
+        "color": 7
+      },
+      "id": "82acada9-b7a1-4993-9503-1e52086e19b0",
+      "name": "Guide — 2.2 Policy review request",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2112,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 2.3 Duplicate or conflict\n\nNew task: save it. Existing matching task: do not duplicate it. Conflicting task data: stop this branch without overwriting the saved task.",
+        "height": 170,
+        "width": 790,
+        "color": 7
+      },
+      "id": "0632ddf4-b137-4bc7-942b-bcaa4cf05f9a",
+      "name": "Guide — 2.3 Duplicate or conflict",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1584,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 3.1 Prepare the analysis payload\n\nCombine claim context and policy checks. Validate types, dates, version and the incident-description limit before analysis.",
+        "height": 150,
+        "width": 940,
+        "color": 7
+      },
+      "id": "75da2d65-d6e0-435e-bf88-9474e3db40db",
+      "name": "Guide — 3.1 Prepare the analysis payload",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3120,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 3.2 Invalid analysis input\n\nConvert input errors into AI_INPUT_VALIDATION review reasons. Save the task and send the platform a correction-required result.",
+        "height": 180,
+        "width": 510,
+        "color": 7
+      },
+      "id": "c0e99a3f-6433-4d91-b249-d92f22a21774",
+      "name": "Guide — 3.2 Invalid analysis input",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3120,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 4.1 Rule-based checks\n\nIdentify policy and evidence gaps. Produce preliminary findings, never a final claim decision.",
+        "height": 150,
+        "width": 440,
+        "color": 7
+      },
+      "id": "0657024c-23c7-412a-8570-a8c6c9832f72",
+      "name": "Guide — 4.1 Rule-based checks",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4304,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 4.2 Local platform report\n\nPlatform requests use this free local route. Convert document flags into a report; no external model call is made here.",
+        "width": 400,
+        "color": 7
+      },
+      "id": "788f3aac-3c1b-4a22-b860-ddc4208e6ea7",
+      "name": "Guide — 4.2 Local platform report",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4832,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 4.3 Alternative LLM route\n\nLegacy requests may use the configured model. It receives claim context and rule results, not original document text. Provider errors may stop this branch.",
+        "height": 200,
+        "width": 440,
+        "color": 7
+      },
+      "id": "8a3973f0-5ad8-4381-ad42-ac080662cf36",
+      "name": "Guide — 4.3 Alternative LLM route",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4304,
+        1008
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 4.4 Validate and merge\n\nCheck the response structure, retain the original rule findings and add valid observations. Invalid output falls back to rules and requires review.",
+        "height": 150,
+        "width": 620,
+        "color": 7
+      },
+      "id": "156cf5d5-ead7-4639-b5f9-1fa463872eb3",
+      "name": "Guide — 4.4 Validate and merge",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        5280,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 5.1 Persist and queue review\n\nSave analysis by job, claim and version. Load it for an AI_PRELIMINARY_ANALYSIS review task. Callback delivery is a parallel branch.",
+        "height": 150,
+        "width": 960,
+        "color": 7
+      },
+      "id": "7dc08d17-e092-4db8-beb3-d1bbf9bf34b5",
+      "name": "Guide — 5.1 Persist and queue review",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        6144,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### 6.1 Deliver the correct result\n\nReturn case_id, job_id and result. The backend rejects stale or conflicting callbacks. HTTP delivery has a timeout and bounded retries.",
+        "height": 150,
+        "width": 900,
+        "color": 7
+      },
+      "id": "f0482294-accc-4ba6-b65b-bf20b07769b9",
+      "name": "Guide — 6.1 Deliver the correct result",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        7360,
+        1824
+      ]
+    },
+    {
+      "parameters": {
         "operation": "executeQuery",
         "query": "\nINSERT INTO claims (\n    claim_number,\n    policy_number,\n    claim_type,\n    accident_date,\n    vehicle_plate,\n    incident_description\n)\nSELECT\n    data->>'claim_number',\n    data->>'policy_number',\n    data->>'claim_type',\n    (data->>'accident_date')::date,\n    data->>'vehicle_plate',\n    data->>'incident_description'\nFROM (\n    SELECT $1::jsonb AS data\n) AS payload\nON CONFLICT (claim_number) DO UPDATE SET claim_number = EXCLUDED.claim_number\nRETURNING id, claim_number, status, created_at;\n",
         "options": {
@@ -12,8 +347,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        -816,
-        -176
+        1280,
+        640
       ],
       "id": "2bf9459d-1eb3-45fa-ab2c-af063b3b1211",
       "name": "Save Claim to PostgreSQL"
@@ -29,8 +364,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -336,
-        -576
+        1648,
+        640
       ],
       "id": "68412d53-494d-411b-86a3-ae46e2b00caa",
       "name": "Prepare Policy Verification Request"
@@ -46,8 +381,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        -320,
-        -352
+        1904,
+        640
       ],
       "id": "40cee97d-6950-4dfc-9d85-29f21180b7f9",
       "name": "Lookup Insurance Policy"
@@ -59,8 +394,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -320,
-        -144
+        2160,
+        640
       ],
       "id": "9710a8fb-d3b6-4848-900d-16933f342a88",
       "name": "Evaluate Policy Verification"
@@ -93,8 +428,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        -320,
-        64
+        2160,
+        992
       ],
       "id": "62e549a8-427b-44a0-9a65-b9c2645ce97f",
       "name": "Check Policy Review Required"
@@ -108,8 +443,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -320,
-        272
+        2416,
+        992
       ],
       "id": "e1006d90-0a2e-4166-a8fc-daf15affb897",
       "name": "Prepare Policy Human Review"
@@ -125,8 +460,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        -304,
-        1168
+        2672,
+        1840
       ],
       "id": "e62ab30a-b2f0-4be8-9969-65ec3f309d92",
       "name": "Save Policy Review Task"
@@ -159,8 +494,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        -320,
-        720
+        2672,
+        1280
       ],
       "id": "528ea43d-efb5-47ee-ba2b-6996152f8850",
       "name": "Is Review Task Conflict"
@@ -176,8 +511,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        -320,
-        496
+        2672,
+        992
       ],
       "id": "a37df5c7-5ba3-489c-b769-3b7b9f4846ca",
       "name": "Check Review Task Conflict"
@@ -189,8 +524,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        864,
-        -544
+        4368,
+        640
       ],
       "id": "2402e620-82b0-4c6c-b6e0-85f6db252576",
       "name": "Preliminary Analysis Engine"
@@ -204,8 +539,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        288,
-        -304
+        3184,
+        640
       ],
       "id": "25181cea-d010-4875-9207-cf4e56c7877f",
       "name": "Prepare AI Analysis Request"
@@ -221,8 +556,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1680,
-        176
+        6192,
+        640
       ],
       "id": "66f09899-7598-49f0-b41c-df7215ffa31b",
       "name": "Save Preliminary Analysis"
@@ -238,8 +573,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        2400,
-        -496
+        6464,
+        640
       ],
       "id": "21a81fbc-0327-4291-9cba-124cc8033ccd",
       "name": "Load Analysis For Review"
@@ -255,8 +590,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        2400,
-        -256
+        6768,
+        640
       ],
       "id": "55e2feff-c0fb-479e-ac7d-f8c6ed0d2300",
       "name": "Create AI Analysis Review Task"
@@ -268,8 +603,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        -1056,
-        -400
+        608,
+        752
       ],
       "id": "16d6b16b-07a5-49f6-b549-88bb2d65086b",
       "name": "Validate Claim Data"
@@ -283,8 +618,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -1168,
-        80
+        864,
+        1248
       ],
       "id": "10729093-f2d1-488e-876d-118500b5b973",
       "name": "Prepare Human Review"
@@ -298,8 +633,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -976,
-        -176
+        1088,
+        640
       ],
       "id": "188a4c68-df09-443a-af10-ebc6517cf0a1",
       "name": "Prepare Verified Intake"
@@ -332,74 +667,11 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        -1248,
-        -160
+        864,
+        752
       ],
       "id": "5282009e-b5be-4f5c-aae8-6ef391bd099c",
       "name": "Check Claim Validation"
-    },
-    {
-      "parameters": {
-        "content": "# *03 — PRELIMINARY ANALYSIS*",
-        "height": 1120,
-        "width": 1744,
-        "color": 6
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "position": [
-        176,
-        -688
-      ],
-      "typeVersion": 1,
-      "id": "bb3120c7-5975-4ae5-a2b6-4f4a80943168",
-      "name": "Sticky Note2"
-    },
-    {
-      "parameters": {
-        "content": "# *04 — UMAN REVIEW COORDINATION*",
-        "height": 944,
-        "width": 800
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "position": [
-        2064,
-        -688
-      ],
-      "typeVersion": 1,
-      "id": "af8641b3-55d4-4537-bad1-cc376980ca93",
-      "name": "Sticky Note3"
-    },
-    {
-      "parameters": {
-        "content": "# *02 — POLICY VERIFICATION*",
-        "height": 2096,
-        "width": 624,
-        "color": 4
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "position": [
-        -576,
-        -688
-      ],
-      "typeVersion": 1,
-      "id": "47b589a8-91f1-49ab-856c-41395ff4059a",
-      "name": "Sticky Note"
-    },
-    {
-      "parameters": {
-        "content": "# *01 — CLAIM INTAKE*",
-        "height": 1008,
-        "width": 848,
-        "color": 5
-      },
-      "type": "n8n-nodes-base.stickyNote",
-      "position": [
-        -1536,
-        -688
-      ],
-      "typeVersion": 1,
-      "id": "7ea0b384-ec04-4829-923b-bda56fc2b6b4",
-      "name": "Sticky Note1"
     },
     {
       "parameters": {
@@ -417,8 +689,8 @@
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.9,
       "position": [
-        944,
-        -256
+        4912,
+        1008
       ],
       "id": "8eb14fc1-d910-4bb3-84d5-dece8905cd23",
       "name": "Basic LLM Chain1"
@@ -436,8 +708,8 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.3,
       "position": [
-        1072,
-        -64
+        4880,
+        1312
       ],
       "id": "96e168fc-5765-45ed-aef9-2dddfb541d12",
       "name": "OpenAI Chat Model1"
@@ -449,8 +721,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        464,
-        -304
+        3456,
+        640
       ],
       "id": "d4dd9b60-c788-4bc5-a3ec-cd890360d5dd",
       "name": "Validate AI Analysis Input"
@@ -483,8 +755,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        640,
-        -304
+        3728,
+        640
       ],
       "id": "a2605660-6b7c-4499-ac1b-64ad744d2aab",
       "name": "Is AI Input Valid?"
@@ -496,8 +768,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1408,
-        -256
+        5328,
+        640
       ],
       "id": "d3c712a4-1e61-4850-9a8f-7bee00b176b6",
       "name": "Output Validation"
@@ -509,8 +781,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1568,
-        -256
+        5664,
+        640
       ],
       "id": "875aa455-4404-4ef0-aad6-7346a768ee69",
       "name": "Merge Analysis Results"
@@ -528,8 +800,8 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
       "position": [
-        -1424,
-        -464
+        112,
+        560
       ],
       "id": "d26955c7-8fb0-40b6-9131-fe8ba6f269a6",
       "name": "Webhook"
@@ -544,8 +816,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        -1216,
-        -400
+        352,
+        752
       ],
       "id": "9c2f90b0-7512-4c6d-be84-13c48ab245b5",
       "name": "Normalize Webhook Input"
@@ -561,8 +833,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        -944,
-        80
+        1120,
+        2096
       ],
       "id": "d77fdfea-c62f-44dd-8a84-8035f59ec88b",
       "name": "Save Data Validation Review"
@@ -576,8 +848,8 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        464,
-        -32
+        3728,
+        1248
       ],
       "id": "8b76d8e4-3b05-444d-a422-4311b21d5780",
       "name": "Prepare AI Input Review"
@@ -593,8 +865,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        704,
-        -32
+        3904,
+        1792
       ],
       "id": "bac236bd-fc2f-4784-9f87-5ea1279e7561",
       "name": "Save AI Input Review Task"
@@ -627,8 +899,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        -304,
-        960
+        2672,
+        1552
       ],
       "id": "6d4e38b4-a5e2-4335-9bd1-050fb20fa4bf",
       "name": "Is Review Task New?"
@@ -645,8 +917,8 @@
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 1,
       "position": [
-        -1424,
-        -336
+        112,
+        928
       ]
     },
     {
@@ -665,8 +937,8 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        1040,
-        -544
+        4624,
+        640
       ]
     },
     {
@@ -678,8 +950,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "position": [
-        1280,
-        -560
+        4912,
+        512
       ]
     },
     {
@@ -691,8 +963,8 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "position": [
-        864,
-        144
+        7424,
+        2096
       ]
     },
     {
@@ -713,8 +985,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1056,
-        144
+        7824,
+        2096
       ],
       "retryOnFail": true,
       "maxTries": 3,

@@ -73,6 +73,7 @@ Document-source links derived from text matching are navigation aids, not verifi
 .\.venv\Scripts\python.exe test_accounts.py
 node test_account_ui.js
 node test_evidence_review.js
+node test_review_center.js
 ```
 
 Account tests use isolated synthetic data; UI tests use a simulated DOM. These are not substitutes for authenticated browser review or independent model-quality evaluation. Node.js and a free localhost port are required for the relevant tests.
@@ -92,3 +93,9 @@ This repository intentionally contains **no** account database, claims database,
 - Native PDF display can depend on browser settings; extracted text remains available.
 
 Offline Arabic documentation: [workflow guide](docs/WORKFLOW_GUIDE_AR.html), [platform connection](docs/PLATFORM_CONNECTION_AR.html), [layout preview](docs/LAYOUT_PREVIEW.html). Workflow links in these presentation snapshots refer to the original local installation; use the workflow ID generated for your installation.
+
+## Review center and public demo
+
+The review queue shows the entered client reference, claim and policy identifiers, source-document count and reasons for human review. Search or filter the queue, then open the exact claim and its evidence before recording a review action with a mandatory reason. Deep links use `#review` and `#review/<case-id>`. Approval/rejection records a local review state, not an insurer coverage or payment decision.
+
+[Try the independent public demo](https://intellisure-insurance-demo.savorycord.chatgpt.site). It uses bundled synthetic documents and browser-session simulation only; it does not call a local server, n8n, PostgreSQL or an external model. Demo source and synthetic assets are in `demo/`; the same review-center JavaScript and CSS are used by both interfaces.

@@ -55,6 +55,12 @@ try:
  check('anonymous_document_blocked',req('/api/documents/'+doc,opener=anonymous)[0]==401)
  with app.base.conn() as c:actor=c.execute("SELECT actor FROM audit WHERE action='created' AND case_id=?",(case,)).fetchone()[0]
  check('audit_uses_account_identity',actor=='qa-owner')
+
+ with app.base.conn() as c:c.execute("UPDATE cases SET status='review',result=? WHERE id=?",(json.dumps({'extracted':{'policy_number':'POL-QA'},'flags':['HOOD_REPAIR_JOD_850_UNCERTAIN'],'claim_version':2}),case))
+ code,_,data=req('/api/review-queue');queue=json.loads(data)
+ check('review_queue_identifies_client_and_reason',code==200 and queue[0]['id']==case and queue[0]['client']=='QA ACCOUNT' and queue[0]['policy_number']=='POL-QA' and queue[0]['document_count']==1 and len(queue[0]['reasons'])==1)
+ check('review_queue_requires_login',req('/api/review-queue',opener=anonymous)[0]==401)
+
  # Stop and restart the HTTP process abstraction; SQLite session must remain valid.
  port=server.server_port;server.shutdown();server.server_close()
  server=app.base.ThreadingHTTPServer(('127.0.0.1',port),app.Handler);threading.Thread(target=server.serve_forever,daemon=True).start()

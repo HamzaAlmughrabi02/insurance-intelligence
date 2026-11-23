@@ -96,6 +96,22 @@ class Handler(auth_sessions.AuthMixin,base.Handler):
  def do_GET(self):
   p=base.urlparse(self.path).path
   if self.auth_get(p):return
+  if p=='/api/review-queue':
+   if not self.auth():return
+   with base.conn() as c:
+    rows=c.execute("SELECT c.id,c.kind,c.client,c.status,c.created_at,c.result,(SELECT count(*) FROM documents d WHERE d.case_id=c.id) AS document_count FROM cases c WHERE c.status='review' ORDER BY c.created_at DESC").fetchall()
+   items=[]
+   for row in rows:
+    item={key:row[key] for key in ['id','kind','client','status','created_at','document_count']}
+    try:result=json.loads(row['result'] or '{}')
+    except (ValueError,TypeError):result={}
+    if not isinstance(result,dict):result={}
+    fields=result.get('extracted') if isinstance(result.get('extracted'),dict) else {}
+    flags=result.get('flags') if isinstance(result.get('flags'),list) else []
+    findings=result.get('findings') if isinstance(result.get('findings'),list) else []
+    item.update(policy_number=fields.get('policy_number'),claim_version=result.get('claim_version'),reasons=flags+findings,summary=result.get('summary',''))
+    items.append(item)
+   return self.reply(200,items)
   if p=='/api/health':return self.reply(200,{'status':'ok','app':'insurance-integration','account_login':True,'n8n_configured':bool(os.environ.get('N8N_WEBHOOK_URL')),'document_access_configured':bool(cfg.get('N8N_DOCUMENT_TOKEN'))})
   if p=='/api/system/status':
    if not self.auth():return
