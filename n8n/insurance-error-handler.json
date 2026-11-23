@@ -2,13 +2,77 @@
   "name": "INSURANCE — LOCAL ERROR HANDLER",
   "nodes": [
     {
+      "id": "15b955be-d502-4bff-9334-73d557f87bbc",
+      "name": "Error section 01",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "content": "# 01 — Catch workflow failure\n\nAutomatic error trigger for the published production workflow.",
+        "width": 640,
+        "height": 1000,
+        "color": 2
+      }
+    },
+    {
+      "id": "db5b8dda-a07d-4d3d-9f1a-420dbc0a572f",
+      "name": "Error section 02",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        704,
+        0
+      ],
+      "parameters": {
+        "content": "# 02 — Report to the platform\n\nPreserve the failing execution and node; do not manufacture a successful result.",
+        "width": 768,
+        "height": 1000,
+        "color": 5
+      }
+    },
+    {
+      "id": "e62695fb-fafa-4502-9271-de5ebc9f60e5",
+      "name": "Guide — 1.1 Capture failure context",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        48,
+        240
+      ],
+      "parameters": {
+        "content": "### 1.1 Capture failure context\n\nExecution Error receives the failed workflow execution and last node. Production links this workflow in its error settings. This trigger is not the platform intake webhook.",
+        "width": 544,
+        "height": 220,
+        "color": 7
+      }
+    },
+    {
+      "id": "d76eb127-c84c-439d-9cf1-4d10e7d0ecce",
+      "name": "Guide — 2.1 Save a scoped error",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        752,
+        240
+      ],
+      "parameters": {
+        "content": "### 2.1 Save a scoped error\n\nRecord Local Error sends the execution and failing node using the internal callback credential. The backend links the registered job, records the error, and marks only an unfinished current case failed. Completed/newer results remain protected.",
+        "width": 672,
+        "height": 240,
+        "color": 7
+      }
+    },
+    {
       "id": "5db99355-e739-461c-9eec-fd4f3bc68d4f",
       "name": "Execution Error",
       "type": "n8n-nodes-base.errorTrigger",
       "typeVersion": 1,
       "position": [
-        0,
-        0
+        128,
+        560
       ],
       "parameters": {}
     },
@@ -18,8 +82,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        300,
-        0
+        800,
+        560
       ],
       "parameters": {
         "method": "POST",

@@ -3,9 +3,9 @@
   "nodes": [
     {
       "parameters": {
-        "content": "# 01 — Claim intake\n\nReceive the claim from the platform or legacy webhook. Validate the required data, save valid intake, or route missing information to review.",
+        "content": "# 01 — Claim intake\n\nReceive the authenticated platform payload. Register its reserved version, validate the fields, and save valid intake or create a missing-data review task. PDF/OCR preparation happens in the backend before this workflow.",
         "height": 2350,
-        "width": 1460,
+        "width": 1844,
         "color": 5
       },
       "id": "bb3120c7-5975-4ae5-a2b6-4f4a80943168",
@@ -29,7 +29,7 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1552,
+        1936,
         0
       ]
     },
@@ -45,7 +45,7 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        3088,
+        3472,
         0
       ]
     },
@@ -61,13 +61,13 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        4272,
+        4656,
         0
       ]
     },
     {
       "parameters": {
-        "content": "# 05 — Save and review\n\nPersist the analysis against its claim, job and version. Prepare the human review task while the platform result follows a separate branch.",
+        "content": "# 05 — Save and queue review\n\nSave the versioned analysis, load it, and persist its human review task. Only after these writes succeed does the result continue to callback delivery.",
         "height": 1610,
         "width": 1070,
         "color": 7
@@ -77,7 +77,7 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        6080,
+        6464,
         0
       ]
     },
@@ -93,13 +93,13 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        7312,
+        7696,
         1648
       ]
     },
     {
       "parameters": {
-        "content": "### 1.1 Entry points\n\nPlatform: authenticated web intake. Legacy: existing integration endpoint.",
+        "content": "### 1.1 Platform entry\n\nWeb App Intake accepts the backend JSON using internal Header Auth. Original files stay in the platform; this entry receives extracted evidence.",
         "height": 170,
         "width": 270,
         "color": 7
@@ -115,7 +115,7 @@
     },
     {
       "parameters": {
-        "content": "### 1.2 Normalize and validate\n\nFlatten the request body and check required fields, event metadata and dates. Valid data continues; incomplete data branches down.",
+        "content": "### 1.2 Normalize → register → validate\n\nNormalize keeps the expected envelope. Register Claim Execution binds this n8n run to the reserved case/job/version. Validate checks types, required fields and dates; it does not prove the facts are true.",
         "height": 150,
         "width": 710,
         "color": 7
@@ -131,9 +131,9 @@
     },
     {
       "parameters": {
-        "content": "### 1.3 Save valid intake\n\nPrepare the validated event and persist the initial claim. Repeated claim numbers return a row without replacing the original fields.",
+        "content": "### 1.3 Versioned intake\n\nPrepare Verified Intake builds the validated event. Save Claim stores an immutable revision and updates the latest fields. A conflicting revision fails instead of replacing history.",
         "height": 170,
-        "width": 390,
+        "width": 470,
         "color": 7
       },
       "id": "39b0d52d-0a97-4afa-a5fc-2614b4eaf209",
@@ -141,7 +141,7 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1056,
+        1344,
         416
       ]
     },
@@ -163,7 +163,7 @@
     },
     {
       "parameters": {
-        "content": "### 2.1 Policy lookup and checks\n\nFind the database policy and assess source verification, status and the accident date. No match is a review reason, not a claim denial.",
+        "content": "### 2.1 Policy lookup and recorded checks\n\nPrepare the lookup, read PostgreSQL, then compare source audit, policy status, dates, vehicle and claim type. MATCH means recorded checks match; coverage remains UNVERIFIED. No record means review, not denial.",
         "height": 150,
         "width": 1270,
         "color": 7
@@ -173,7 +173,7 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1600,
+        1984,
         304
       ]
     },
@@ -189,13 +189,13 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        2112,
+        2496,
         800
       ]
     },
     {
       "parameters": {
-        "content": "### 2.3 Duplicate or conflict\n\nNew task: save it. Existing matching task: do not duplicate it. Conflicting task data: stop this branch without overwriting the saved task.",
+        "content": "### 2.3 Keep one consistent review task\n\nMatching existing task: continue. New task: save, then continue. Conflicting task: Stop Conflicting Review Task raises an error; the error workflow records the failing node without overwriting the saved task.",
         "height": 170,
         "width": 790,
         "color": 7
@@ -205,7 +205,7 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        1584,
+        1968,
         1280
       ]
     },
@@ -221,7 +221,7 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        3120,
+        3504,
         304
       ]
     },
@@ -237,13 +237,13 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        3120,
+        3504,
         1120
       ]
     },
     {
       "parameters": {
-        "content": "### 4.1 Rule-based checks\n\nIdentify policy and evidence gaps. Produce preliminary findings, never a final claim decision.",
+        "content": "### 4.1 Source-bound rule findings\n\nCheck policy/evidence gaps and supplied financial findings. Amounts and currencies retain their source quotes. Findings stay preliminary and never become an automatic coverage decision.",
         "height": 150,
         "width": 440,
         "color": 7
@@ -253,7 +253,7 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        4304,
+        4688,
         304
       ]
     },
@@ -268,13 +268,13 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        4832,
+        5216,
         304
       ]
     },
     {
       "parameters": {
-        "content": "### 4.3 Alternative LLM route\n\nLegacy requests may use the configured model. It receives claim context and rule results, not original document text. Provider errors may stop this branch.",
+        "content": "### 4.3 Alternative advisory route\n\nThe configured model receives claim context and rule results. It does not verify document authenticity. Any alternate prose remains advisory; rules and source status remain authoritative.",
         "height": 200,
         "width": 440,
         "color": 7
@@ -284,13 +284,13 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        4304,
+        4688,
         1008
       ]
     },
     {
       "parameters": {
-        "content": "### 4.4 Validate and merge\n\nCheck the response structure, retain the original rule findings and add valid observations. Invalid output falls back to rules and requires review.",
+        "content": "### 4.4 Structure check → safe merge\n\nOutput Validation checks the exact report schema and boundaries. Merge retains deterministic facts and findings. Invalid model output falls back to rules; valid structure does not verify truth.",
         "height": 150,
         "width": 620,
         "color": 7
@@ -300,13 +300,13 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        5280,
+        5664,
         304
       ]
     },
     {
       "parameters": {
-        "content": "### 5.1 Persist and queue review\n\nSave analysis by job, claim and version. Load it for an AI_PRELIMINARY_ANALYSIS review task. Callback delivery is a parallel branch.",
+        "content": "### 5.1 Save → load → create review task\n\nSave Preliminary Analysis preserves the first result for this job. Load Analysis For Review reads it. Create AI Analysis Review Task returns the new or existing task; delivery waits for completion.",
         "height": 150,
         "width": 960,
         "color": 7
@@ -316,13 +316,13 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        6144,
+        6528,
         304
       ]
     },
     {
       "parameters": {
-        "content": "### 6.1 Deliver the correct result\n\nReturn case_id, job_id and result. The backend rejects stale or conflicting callbacks. HTTP delivery has a timeout and bounded retries.",
+        "content": "### 6.1 Package → deliver → verify\n\nPrepare Web Result returns the saved analysis and original evidence snapshot. Deliver Web Result uses bounded retries. The backend rejects stale versions, changed evidence and conflicting callbacks.",
         "height": 150,
         "width": 900,
         "color": 7
@@ -332,9 +332,89 @@
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        7360,
+        7744,
         1824
       ]
+    },
+    {
+      "id": "e377b9d2-6117-4c79-a5ce-83fa308864fd",
+      "name": "Reliability and source boundaries",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        2432
+      ],
+      "parameters": {
+        "content": "# 07 — Connection readiness & supporting workflows\n\nAn independent health route, not a claim-analysis step. Short executions here are expected when the platform checks its connection.",
+        "width": 1844,
+        "height": 1040,
+        "color": 5
+      }
+    },
+    {
+      "id": "bbbc5763-ca95-4a7c-bdeb-3bea66f4280b",
+      "name": "Guide — 2.4 Failure is visible",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1968,
+        1600
+      ],
+      "parameters": {
+        "content": "### 2.4 Failure is visible\n\nStop Conflicting Review Task ends this run explicitly. The linked error workflow reports the execution and node to the platform. Correct the case and submit a new version when needed.",
+        "width": 830,
+        "height": 180,
+        "color": 7
+      }
+    },
+    {
+      "id": "89666cf5-6974-4fba-8e88-cdf4ea67ae3e",
+      "name": "Guide — 7.1 Check the published route",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        48,
+        2672
+      ],
+      "parameters": {
+        "content": "### 7.1 Check the published route\n\nWorkflow Readiness accepts an authenticated GET on /insurance-readiness. It proves that this published workflow is reachable; it does not upload documents or start a claim.",
+        "width": 752,
+        "height": 200,
+        "color": 7
+      }
+    },
+    {
+      "id": "c631cfbd-e379-4eec-85fc-78732287a819",
+      "name": "Guide — 7.2 Return readiness",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        976,
+        2672
+      ],
+      "parameters": {
+        "content": "### 7.2 Return readiness\n\nConfirm Workflow Ready replies to the health request. The platform combines this signal with its database and n8n checks before displaying service readiness.",
+        "width": 816,
+        "height": 200,
+        "color": 7
+      }
+    },
+    {
+      "id": "0459563d-ff0c-4e51-8aec-06b513dbafe6",
+      "name": "Guide — 7.3 Separate responsibilities",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        48,
+        3232
+      ],
+      "parameters": {
+        "content": "### 7.3 Separate responsibilities\n\nBackend: PDF text, OCR and reserved versions.\n\nSupporting n8n workflows: [Error handling](http://localhost:5678/workflow/d8455bca-ccfe-4f1c-bec2-94c581ab0f40) · [Review synchronization](http://localhost:5678/workflow/55f1e1b8-3189-45f8-a479-1a685fcf9efd) · [Read-only assistant](http://localhost:5678/workflow/68aa52f3-5eb4-455a-a828-147debd64b25)\n\nThe assistant reads evidence only. A recorded review does not authorize insurance coverage or payment.",
+        "width": 1744,
+        "height": 190,
+        "color": 7
+      }
     },
     {
       "parameters": {
@@ -347,7 +427,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1280,
+        1600,
         640
       ],
       "id": "2bf9459d-1eb3-45fa-ab2c-af063b3b1211",
@@ -364,7 +444,7 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        1648,
+        2032,
         640
       ],
       "id": "68412d53-494d-411b-86a3-ae46e2b00caa",
@@ -381,7 +461,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1904,
+        2288,
         640
       ],
       "id": "40cee97d-6950-4dfc-9d85-29f21180b7f9",
@@ -394,7 +474,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2160,
+        2544,
         640
       ],
       "id": "9710a8fb-d3b6-4848-900d-16933f342a88",
@@ -428,7 +508,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        2160,
+        2544,
         992
       ],
       "id": "62e549a8-427b-44a0-9a65-b9c2645ce97f",
@@ -443,7 +523,7 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        2416,
+        2800,
         992
       ],
       "id": "e1006d90-0a2e-4166-a8fc-daf15affb897",
@@ -460,7 +540,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        2672,
+        3056,
         1840
       ],
       "id": "e62ab30a-b2f0-4be8-9969-65ec3f309d92",
@@ -494,7 +574,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        2672,
+        3056,
         1280
       ],
       "id": "528ea43d-efb5-47ee-ba2b-6996152f8850",
@@ -511,7 +591,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        2672,
+        3056,
         992
       ],
       "id": "a37df5c7-5ba3-489c-b769-3b7b9f4846ca",
@@ -524,7 +604,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        4368,
+        4752,
         640
       ],
       "id": "2402e620-82b0-4c6c-b6e0-85f6db252576",
@@ -537,7 +617,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3184,
+        3568,
         640
       ],
       "id": "25181cea-d010-4875-9207-cf4e56c7877f",
@@ -554,7 +634,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        6192,
+        6576,
         640
       ],
       "id": "66f09899-7598-49f0-b41c-df7215ffa31b",
@@ -571,7 +651,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        6464,
+        6848,
         640
       ],
       "id": "21a81fbc-0327-4291-9cba-124cc8033ccd",
@@ -588,7 +668,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        6768,
+        7152,
         640
       ],
       "id": "55e2feff-c0fb-479e-ac7d-f8c6ed0d2300",
@@ -601,7 +681,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        608,
+        864,
         752
       ],
       "id": "16d6b16b-07a5-49f6-b549-88bb2d65086b",
@@ -631,7 +711,7 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        1088,
+        1376,
         640
       ],
       "id": "188a4c68-df09-443a-af10-ebc6517cf0a1",
@@ -665,7 +745,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        864,
+        1120,
         752
       ],
       "id": "5282009e-b5be-4f5c-aae8-6ef391bd099c",
@@ -687,7 +767,7 @@
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.9,
       "position": [
-        4912,
+        5296,
         1008
       ],
       "id": "8eb14fc1-d910-4bb3-84d5-dece8905cd23",
@@ -706,7 +786,7 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.3,
       "position": [
-        4880,
+        5264,
         1312
       ],
       "id": "96e168fc-5765-45ed-aef9-2dddfb541d12",
@@ -719,7 +799,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3456,
+        3840,
         640
       ],
       "id": "d4dd9b60-c788-4bc5-a3ec-cd890360d5dd",
@@ -753,7 +833,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        3728,
+        4112,
         640
       ],
       "id": "a2605660-6b7c-4499-ac1b-64ad744d2aab",
@@ -766,7 +846,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5328,
+        5712,
         640
       ],
       "id": "d3c712a4-1e61-4850-9a8f-7bee00b176b6",
@@ -779,7 +859,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        5664,
+        6048,
         640
       ],
       "id": "875aa455-4404-4ef0-aad6-7346a768ee69",
@@ -827,7 +907,7 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        3728,
+        4112,
         1248
       ],
       "id": "8b76d8e4-3b05-444d-a422-4311b21d5780",
@@ -844,7 +924,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        3904,
+        4288,
         1792
       ],
       "id": "bac236bd-fc2f-4784-9f87-5ea1279e7561",
@@ -878,7 +958,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.3,
       "position": [
-        2672,
+        3056,
         1552
       ],
       "id": "6d4e38b4-a5e2-4335-9bd1-050fb20fa4bf",
@@ -916,7 +996,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
       "position": [
-        4624,
+        5008,
         640
       ]
     },
@@ -929,7 +1009,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "position": [
-        4912,
+        5296,
         512
       ]
     },
@@ -942,7 +1022,7 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 1,
       "position": [
-        7424,
+        7808,
         2096
       ]
     },
@@ -964,7 +1044,7 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        7824,
+        8208,
         2096
       ],
       "retryOnFail": true,
@@ -977,8 +1057,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        480,
-        960
+        608,
+        752
       ],
       "parameters": {
         "method": "POST",
@@ -1002,7 +1082,7 @@
       "type": "n8n-nodes-base.stopAndError",
       "typeVersion": 1,
       "position": [
-        2416,
+        2800,
         1280
       ],
       "parameters": {
@@ -1016,7 +1096,7 @@
       "typeVersion": 2,
       "position": [
         128,
-        2752
+        3024
       ],
       "parameters": {
         "httpMethod": "GET",
@@ -1032,28 +1112,13 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        480,
-        2752
+        1104,
+        3024
       ],
       "parameters": {
         "respondWith": "json",
         "responseBody": "={\"ready\":true,\"revision\":\"reliability-v1\"}",
         "options": {}
-      }
-    },
-    {
-      "id": "e377b9d2-6117-4c79-a5ce-83fa308864fd",
-      "name": "Reliability and source boundaries",
-      "type": "n8n-nodes-base.stickyNote",
-      "typeVersion": 1,
-      "position": [
-        0,
-        2432
-      ],
-      "parameters": {
-        "content": "## Reliable processing\nRegister the reserved version; finish all review writes before delivering the result.\nOCR and local vision run in background preparation.\nRecorded checks are not coverage decisions. Read-only assistant is a separate workflow.",
-        "width": 650,
-        "height": 200
       }
     }
   ],

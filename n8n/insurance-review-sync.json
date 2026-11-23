@@ -2,13 +2,109 @@
   "name": "INSURANCE — REVIEW SYNCHRONIZATION",
   "nodes": [
     {
+      "id": "771730f3-8a27-456e-8862-5ac9d588fb6a",
+      "name": "Sync section 01",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "content": "# 01 — Receive saved review\n\nThe platform first saves the review and durable outbox event locally.",
+        "width": 576,
+        "height": 1000,
+        "color": 5
+      }
+    },
+    {
+      "id": "42320587-c40f-45f7-bcd0-c6a34e2f9a37",
+      "name": "Sync section 02",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        640,
+        0
+      ],
+      "parameters": {
+        "content": "# 02 — Synchronize task state\n\nApply the recorded review to PostgreSQL using its case, version and event identity.",
+        "width": 832,
+        "height": 1000,
+        "color": 4
+      }
+    },
+    {
+      "id": "1f32e78f-b500-4201-a5f1-3af8670104f7",
+      "name": "Sync section 03",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1536,
+        0
+      ],
+      "parameters": {
+        "content": "# 03 — Acknowledge delivery\n\nMark synchronization complete only after the database operation succeeds.",
+        "width": 576,
+        "height": 1000,
+        "color": 2
+      }
+    },
+    {
+      "id": "8a4259d7-03ae-40f4-a366-686322e3c487",
+      "name": "Guide — 1.1 Receive a versioned event",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        48,
+        240
+      ],
+      "parameters": {
+        "content": "### 1.1 Receive a versioned event\n\nReview Event Intake requires Header Auth. Input includes event_id, case/version, reviewer, decision and reason. The browser cannot directly write PostgreSQL.",
+        "width": 480,
+        "height": 220,
+        "color": 7
+      }
+    },
+    {
+      "id": "d06efd9d-0000-4ea3-a80e-9c3428ffe8b1",
+      "name": "Guide — 2.1 Resolve current tasks",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        688,
+        240
+      ],
+      "parameters": {
+        "content": "### 2.1 Resolve current tasks\n\nResolve Versioned Review Tasks calls the versioned SQL function. Resolve current tasks; cancel older tasks; retain history. Repeated identical events are safe. Late tasks cannot reopen an already reviewed version.",
+        "width": 736,
+        "height": 220,
+        "color": 7
+      }
+    },
+    {
+      "id": "ae812dc9-8046-452f-8122-e6df46af77cc",
+      "name": "Guide — 3.1 Return the receipt",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1584,
+        240
+      ],
+      "parameters": {
+        "content": "### 3.1 Return the receipt\n\nAcknowledge Review Sync returns event_id and synced status. Missing/failed acknowledgement leaves the durable outbox pending for retry. This records review state, not an insurer payment or coverage decision.",
+        "width": 480,
+        "height": 240,
+        "color": 7
+      }
+    },
+    {
       "id": "53ae6dc1-eaf8-4cd7-b56a-f970490f16c9",
       "name": "Review Event Intake",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        0,
-        0
+        128,
+        560
       ],
       "parameters": {
         "httpMethod": "POST",
@@ -24,8 +120,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        300,
-        0
+        816,
+        560
       ],
       "parameters": {
         "operation": "executeQuery",
@@ -41,8 +137,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        600,
-        0
+        1664,
+        560
       ],
       "parameters": {
         "respondWith": "json",

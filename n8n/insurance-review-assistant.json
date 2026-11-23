@@ -2,13 +2,205 @@
   "name": "INSURANCE — READ ONLY REVIEW ASSISTANT",
   "nodes": [
     {
+      "id": "9f212280-2a09-4d42-b02a-67b74e4222bd",
+      "name": "Assistant section 01",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "parameters": {
+        "content": "# 01 — Scoped request\n\nA reviewer asks about one completed case and one reserved version.",
+        "width": 512,
+        "height": 1610,
+        "color": 5
+      }
+    },
+    {
+      "id": "190ab527-a261-475e-8cef-70ba9bb4a900",
+      "name": "Guide — 1.1 Receive the question",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        48,
+        240
+      ],
+      "parameters": {
+        "content": "### 1.1 Receive the question\n\nReview Assistant Intake receives request_id, case/version and the question using internal Header Auth. The backend owns the scope and time limit.",
+        "width": 416,
+        "height": 220,
+        "color": 7
+      }
+    },
+    {
+      "id": "afe8f63b-4421-4ffa-b082-fa70a4ed8638",
+      "name": "Assistant section 02",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        576,
+        0
+      ],
+      "parameters": {
+        "content": "# 02 — Read-only evidence retrieval\n\nThe local agent selects bounded reading tools. These lower connections provide tools/model context; they are not a second claim-processing path.",
+        "width": 1184,
+        "height": 1610,
+        "color": 4
+      }
+    },
+    {
+      "id": "cf59a3a5-5f3a-4120-8d1e-777093fef433",
+      "name": "Guide — 2.1 Choose evidence to read",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        624,
+        240
+      ],
+      "parameters": {
+        "content": "### 2.1 Choose evidence to read\n\nEvidence Review Agent uses Local Review Model (Ollama). At most four agent iterations; backend request budgets and deadlines also apply. No memory shared between claims and no write/SQL tools.",
+        "width": 1088,
+        "height": 220,
+        "color": 7
+      }
+    },
+    {
+      "id": "dbecade6-7415-428d-af65-698042a0a2e3",
+      "name": "Guide — 2.2 Model and three reading tools",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        624,
+        1296
+      ],
+      "parameters": {
+        "content": "### 2.2 Model and three reading tools\n\nLocal Review Model: local Qwen. Read Claim: fields, findings and existing source quotes. Search Evidence: find relevant text. Read Page: read a page belonging to this case only. Every tool retains the fixed request scope.",
+        "width": 1088,
+        "height": 210,
+        "color": 7
+      }
+    },
+    {
+      "id": "0b6cdcec-467d-4a9d-ac27-411966f6ce2a",
+      "name": "Assistant section 03",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1824,
+        0
+      ],
+      "parameters": {
+        "content": "# 03 — Collect actual sources\n\nOnly text returned by the scoped reading tools can support the draft.",
+        "width": 576,
+        "height": 1610,
+        "color": 3
+      }
+    },
+    {
+      "id": "965b3183-419a-473a-9704-1f5f03842992",
+      "name": "Guide — 3.1 Load returned evidence",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1872,
+        240
+      ],
+      "parameters": {
+        "content": "### 3.1 Load returned evidence\n\nLoad Retrieved Sources retrieves the question and source text recorded for this request. It does not accept an arbitrary file path or fetch another case.",
+        "width": 480,
+        "height": 220,
+        "color": 7
+      }
+    },
+    {
+      "id": "ffd14783-d211-4d87-a7e6-75ff1a9b5092",
+      "name": "Assistant section 04",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2464,
+        0
+      ],
+      "parameters": {
+        "content": "# 04 — Format a cited draft\n\nA separate formatting chain turns the retrieved text into a constrained answer.",
+        "width": 832,
+        "height": 1610,
+        "color": 6
+      }
+    },
+    {
+      "id": "3928585e-c64d-4c33-b8b6-a09689ae718d",
+      "name": "Guide — 4.1 Build the answer",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2512,
+        240
+      ],
+      "parameters": {
+        "content": "### 4.1 Build the answer\n\nFormat Evidence Draft receives the question and retrieved sources. It proposes an answer with document_id, page and exact quotation, or reports insufficient evidence.",
+        "width": 736,
+        "height": 220,
+        "color": 7
+      }
+    },
+    {
+      "id": "3d42cc79-7ce8-4ca6-b9a5-1dfa3191c02e",
+      "name": "Guide — 4.2 Local model + output schema",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2512,
+        1296
+      ],
+      "parameters": {
+        "content": "### 4.2 Local model + output schema\n\nEvidence Formatting Model supplies the local model. Evidence Answer Schema constrains the JSON structure. Passing this schema checks the format, not whether the answer is true.",
+        "width": 736,
+        "height": 210,
+        "color": 7
+      }
+    },
+    {
+      "id": "c50dcdfe-84c1-4692-814c-e0064bf39b0a",
+      "name": "Assistant section 05",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3360,
+        0
+      ],
+      "parameters": {
+        "content": "# 05 — Validate & return\n\nThe backend checks scope and quotations before anything is shown to the reviewer.",
+        "width": 1152,
+        "height": 1610,
+        "color": 2
+      }
+    },
+    {
+      "id": "62b078b9-8f57-426f-858f-be0cb3ee8788",
+      "name": "Guide — 5.1 Check sources → return draft",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3408,
+        240
+      ],
+      "parameters": {
+        "content": "### 5.1 Check sources → return draft\n\nValidate Case Sources rejects stale scope and quotations not present in the tool-returned evidence. Return Evidence Draft sends the checked response to the platform. This workflow cannot approve, reject or edit a claim.",
+        "width": 1056,
+        "height": 220,
+        "color": 7
+      }
+    },
+    {
       "id": "b401badf-120d-4879-a2f2-0b9745b54744",
       "name": "Review Assistant Intake",
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
       "position": [
-        0,
-        0
+        128,
+        560
       ],
       "parameters": {
         "httpMethod": "POST",
@@ -24,8 +216,8 @@
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 2.2,
       "position": [
-        320,
-        0
+        944,
+        560
       ],
       "parameters": {
         "promptType": "define",
@@ -42,8 +234,8 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
       "typeVersion": 1,
       "position": [
-        200,
-        300
+        688,
+        1120
       ],
       "parameters": {
         "model": "qwen3-vl:2b-instruct",
@@ -60,8 +252,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1200,
-        0
+        3488,
+        560
       ],
       "parameters": {
         "method": "POST",
@@ -85,8 +277,8 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
       "position": [
-        1500,
-        0
+        4064,
+        560
       ],
       "parameters": {
         "respondWith": "json",
@@ -100,8 +292,8 @@
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
       "position": [
-        750,
-        350
+        944,
+        1120
       ],
       "parameters": {
         "toolDescription": "Read fields, findings and document IDs for this request only.",
@@ -133,8 +325,8 @@
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
       "position": [
-        800,
-        350
+        1200,
+        1120
       ],
       "parameters": {
         "toolDescription": "Search text in this claim. Use short English/Arabic words; returns exact quotes.",
@@ -170,8 +362,8 @@
       "type": "@n8n/n8n-nodes-langchain.toolHttpRequest",
       "typeVersion": 1.1,
       "position": [
-        850,
-        350
+        1456,
+        1120
       ],
       "parameters": {
         "toolDescription": "Read one source page from this claim using a returned document ID and page.",
@@ -211,8 +403,8 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        580,
-        0
+        1952,
+        560
       ],
       "parameters": {
         "method": "POST",
@@ -233,8 +425,8 @@
       "type": "@n8n/n8n-nodes-langchain.chainLlm",
       "typeVersion": 1.7,
       "position": [
-        850,
-        0
+        2592,
+        560
       ],
       "parameters": {
         "promptType": "define",
@@ -256,8 +448,8 @@
       "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
       "typeVersion": 1,
       "position": [
-        800,
-        300
+        2592,
+        1120
       ],
       "parameters": {
         "model": "qwen3-vl:2b-instruct",
@@ -275,8 +467,8 @@
       "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
       "typeVersion": 1.3,
       "position": [
-        1050,
-        300
+        2976,
+        1120
       ],
       "parameters": {
         "schemaType": "manual",
