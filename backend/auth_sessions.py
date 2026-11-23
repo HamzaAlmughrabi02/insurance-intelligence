@@ -8,7 +8,7 @@ import server as base
 
 PASSWORDS=PasswordHasher(time_cost=3,memory_cost=65536,parallelism=2)
 HASH_SLOTS=threading.BoundedSemaphore(2)
-COOKIE='insurance_session'
+COOKIE='insurance_v2_session'
 DUMMY_HASH=PASSWORDS.hash(secrets.token_urlsafe(32))
 
 def digest(value):return hashlib.sha256(value.encode()).hexdigest()

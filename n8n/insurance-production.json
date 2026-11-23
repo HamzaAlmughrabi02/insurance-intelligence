@@ -1,5 +1,4 @@
 {
-  "name": "INSURANCE — PRODUCTION",
   "nodes": [
     {
       "parameters": {
@@ -378,7 +377,7 @@
         2672
       ],
       "parameters": {
-        "content": "### 7.1 Check the published route\n\nWorkflow Readiness accepts an authenticated GET on /insurance-readiness. It proves that this published workflow is reachable; it does not upload documents or start a claim.",
+        "content": "### 7.1 Check the published route\n\nWorkflow Readiness accepts an authenticated GET on /insurance-v2-readiness. It proves that this published workflow is reachable; it does not upload documents or start a claim.",
         "width": 752,
         "height": 200,
         "color": 7
@@ -410,7 +409,7 @@
         3232
       ],
       "parameters": {
-        "content": "### 7.3 Separate responsibilities\n\nBackend: PDF text, OCR and reserved versions.\n\nSupporting n8n workflows: [Error handling](http://localhost:5678/workflow/d8455bca-ccfe-4f1c-bec2-94c581ab0f40) · [Review synchronization](http://localhost:5678/workflow/55f1e1b8-3189-45f8-a479-1a685fcf9efd) · [Read-only assistant](http://localhost:5678/workflow/68aa52f3-5eb4-455a-a828-147debd64b25)\n\nThe assistant reads evidence only. A recorded review does not authorize insurance coverage or payment.",
+        "content": "### 7.3 Separate responsibilities\n\nBackend: PDF text, OCR and reserved versions.\n\nSupporting n8n workflows: [Error handling](http://localhost:5678/workflow/7a7341255d9619a3) · [Review synchronization](http://localhost:5678/workflow/5fc8604cdb2d6e48) · [Read-only assistant](http://localhost:5678/workflow/492ef4d1806c4da8)\n\nThe assistant reads evidence only. A recorded review does not authorize insurance coverage or payment.",
         "width": 1744,
         "height": 190,
         "color": 7
@@ -771,7 +770,8 @@
         1008
       ],
       "id": "8eb14fc1-d910-4bb3-84d5-dece8905cd23",
-      "name": "Basic LLM Chain1"
+      "name": "Basic LLM Chain1",
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -967,7 +967,7 @@
     {
       "parameters": {
         "httpMethod": "POST",
-        "path": "insurance-web-intake",
+        "path": "insurance-v2-web-intake",
         "authentication": "headerAuth",
         "options": {}
       },
@@ -1029,7 +1029,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://127.0.0.1:8766/api/integrations/n8n/result",
+        "url": "http://127.0.0.1:8786/api/integrations/n8n/result",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -1062,7 +1062,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "http://127.0.0.1:8766/api/integrations/n8n/started",
+        "url": "http://127.0.0.1:8786/api/integrations/n8n/started",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -1100,7 +1100,7 @@
       ],
       "parameters": {
         "httpMethod": "GET",
-        "path": "insurance-readiness",
+        "path": "insurance-v2-readiness",
         "authentication": "headerAuth",
         "responseMode": "responseNode",
         "options": {}
@@ -1555,12 +1555,13 @@
     "executionOrder": "v1",
     "binaryMode": "separate",
     "availableInMCP": false,
-    "errorWorkflow": "d8455bca-ccfe-4f1c-bec2-94c581ab0f40"
+    "errorWorkflow": "7a7341255d9619a3"
   },
+  "name": "INSURANCE V2 — PRODUCTION",
   "active": false,
   "pinData": {},
   "staticData": null,
   "meta": {
-    "templateWorkflowId": "twp5T9wAHIFHFsJs"
+    "templateWorkflowId": "d9680d3641a921f8"
   }
 }

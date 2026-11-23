@@ -3,7 +3,7 @@ const root=__dirname,html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 async function scenario(configured){
  const nodes=new Map(),requests=[];
  function element(){return {value:'',innerHTML:'',textContent:'',disabled:false,classList:{add(){},remove(){}},addEventListener(){},setAttribute(){},remove(){}}}
- const document={getElementById(id){if(!nodes.has(id))nodes.set(id,element());return nodes.get(id)},addEventListener(){},createElement:element,body:{classList:{add(){},remove(){}},append(){}}};
+ const document={querySelector(){return null},querySelectorAll(){return []},getElementById(id){if(!nodes.has(id))nodes.set(id,element());return nodes.get(id)},addEventListener(){},createElement:element,body:{classList:{add(){},remove(){}},append(){}}};
  const context=vm.createContext({document,window:{scrollTo(){},addEventListener(){}},location:{hash:configured?'':'#setup=synthetic-invite',pathname:'/',search:''},history:{replaceState(){},pushState(){}},URLSearchParams,setTimeout(){},setInterval(){},clearInterval(){},console,Blob,fetch:async(url,options={})=>{
   requests.push({url,options});const data=url.endsWith('/auth/status')?{setup_required:!configured}:url.endsWith('/auth/session')?{user:{username:'qa-owner',role:'admin'},csrf:'synthetic-csrf'}:url==='/api/cases'&&(!options.method||options.method==='GET')?[]:url.endsWith('/system/status')?{ready:true}:{};
   return {ok:true,status:200,json:async()=>data};

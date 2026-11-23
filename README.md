@@ -1,130 +1,80 @@
-# Insurance Intelligence · IntelliSure
+# IntelliSure V2 · Evidence review workbench
 
-Local insurance document intake and preliminary claims review, with an Arabic interface, a Python backend, n8n and PostgreSQL.
+Independent development edition for motor-claim document review. The original local application and public demo remain separate.
 
-**Local MVP, not a production certification or an automated coverage decision system.** Existing deployment tests do not establish accuracy for arbitrary customer documents.
+## What changed
 
-## Included
+- Versioned structured reports with overview, findings, document comparison, reading coverage, follow-up tasks and revision differences.
+- Exact document/page/span citations, highlighted text, side-by-side excerpts and a printable report with source text.
+- Explicit unknown/partial/unreadable page coverage, uploaded-file hash checks, suggested document roles and reviewer overrides.
+- General motor-part mentions, source-linked invoice rows, single-currency line arithmetic with explicit tax/discount rows, and explicit quantity/unit/line-total checks for supported pipe-separated layouts.
+- Durable report queue and two local model calls inside a dedicated n8n workflow. Ollama native JSON-schema output, bounded context/output and no paid model dependency.
+- Deterministic publication gate, case/version/execution scope, idempotent callbacks, report attempt snapshots, task revision CAS, and mandatory written reasons.
+- Supplement uploads preserve original files and require a new analysis version. Current review cannot be approved while follow-up tasks are open or document-role changes require reanalysis.
 
-- Arabic account setup/login, Argon2id password hashing, persistent HttpOnly sessions, CSRF protection and server-side reviewer roles.
-- Multi-document intake, native PDF text extraction and limited XLSX extraction; optional local OCR reads images/scanned PDFs with source and confidence checks.
-- In-page PDF/image preview, extracted-text view, Arabic review findings and text-matched source navigation.
-- Versioned correction/reanalysis, audit history, durable dispatch jobs and idempotent callbacks.
-- Sanitized production and explanation workflow templates, schema-only PostgreSQL initialization, prompt source and offline documentation.
-- Windows launcher that reuses running services and opens the account UI.
+## Publication policy and accuracy
 
-The current web route uses local rules and document flags. `Basic LLM Chain1` is an alternative route and does **not** receive original document text. No external model is needed for the normal website route.
+Live synthetic QA found correlated semantic errors: the local analyst and local auditor could agree on a wrong paraphrase. V2 therefore does **not** automatically publish free model paraphrases. It publishes deterministic findings and, when all gates pass, model-selected text matching an original quotation. Other proposals remain explicitly withheld for human assessment. The free evidence assistant returns quotations rather than unsupported prose.
 
-## Fresh Windows installation
+A JSON schema checks structure. Source matching checks provenance. Neither establishes factual authenticity, coverage eligibility or universal semantic accuracy. No certified accuracy percentage is claimed. A held-out, specialist-labelled real-document benchmark remains necessary before broadening automatic semantic publication.
 
-Prerequisites: Python 3.11+, Node.js, an npm installation of n8n, and Docker Desktop. The workflow was exercised on n8n **2.8.4**; validate compatibility before upgrading. The frontend uses plain JavaScript/CSS, with no build framework or paid service.
+Arithmetic is scoped to supported readable layouts and printed line amounts; it is not market-price validation or full table understanding. A lexical negation marker is labelled as text requiring context, not a proven contradiction. Suggested document roles are not authoritative classification.
 
-Do not run fresh database provisioning over an existing deployment. Preserve its Docker volume, local configuration, uploads, SQLite database, and n8n installation.
+## Current local deployment
 
-```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe setup_local.py
-docker compose up -d
-```
-
-Initialize your local n8n owner account once using `n8n.cmd start`, then follow the n8n setup screen. This login is separate from the website account.
-
-Import the integration with locally generated credentials:
-
-```powershell
-.\.venv\Scripts\python.exe setup_n8n.py
-```
-
-This imports **four inactive workflows**; their IDs and the main editor URL are saved in `local-setup-state.json`. Check the PostgreSQL, Header Auth and local Ollama credentials. Publish the error handler, review synchronization and production workflows; publish the review assistant when its local model is available. If you use the alternative external-model path, configure its model credential separately. Keep the explanation template inactive: its webhook paths are identical to production. Stop n8n before CLI imports and restart it afterward so its runtime loads the imported versions.
-
-To create a Windows desktop shortcut:
-
-```powershell
-.\install_shortcut.ps1
-```
-
-Double-click **IntelliSure**. The launcher starts the existing PostgreSQL container and n8n when needed, starts the website, and opens a one-time account setup link. Choose your own username and password (at least 12 characters). There is no default website password. Later visits use your account or the remembered session, without entering API tokens.
-
-## Network contract
-
-| Component | Local address |
+| Service | Address |
 |---|---|
-| Website | `http://127.0.0.1:8766` |
-| n8n editor | `http://localhost:5678` |
-| PostgreSQL from Windows | `127.0.0.1:5433` |
-| PostgreSQL inside Docker | `5432` |
-| Claim intake | `POST http://127.0.0.1:5678/webhook/insurance-web-intake` |
-| Result callback | `POST http://127.0.0.1:8766/api/integrations/n8n/result` |
+| V2 website | http://127.0.0.1:8786 |
+| V2 OCR reader | http://127.0.0.1:8787 |
+| Shared n8n editor | http://localhost:5678 |
+| Shared local Ollama | http://127.0.0.1:11434 |
+| V2 PostgreSQL | insurance_ai_v2, dedicated insurance_v2 role |
+| Original website | http://127.0.0.1:8766 |
 
-The backend extracts and persists source text before sending the n8n payload. n8n returns `{case_id, job_id, result}` using a separate callback credential. Website sessions never receive the integration tokens.
+Use the **IntelliSure V2** desktop shortcut. First use opens an expiring setup invitation; choose your own account/password. V2 has its own session cookie and account database. There is no default production password. The original shortcut remains available.
 
-## Daily flow
+Daily flow: upload one motor-claim file set → wait for extraction and the main n8n analysis → wait for the separately tracked report audit → open findings and exact sources → resolve/assign follow-up tasks → upload supplements or correct document roles → reanalyze with a written reason → compare versions → record human review.
 
-Open IntelliSure → sign in → choose a motor claim → enter a client reference → upload all documents belonging to that claim → start analysis → review findings and source pages → correct with a reason and reanalyze when needed.
+Closing/waiving a follow-up task records a reviewer action; it does not repair a document or authorize insurer coverage/payment. Role/supplement changes do not silently modify a saved report.
 
-Document-source links derived from text matching are navigation aids, not verified evidence attribution. A missing policy database row is not proof that no policy exists. No automatic final coverage, liability or payment decision is made.
+## Architecture
+
+1. Python backend reads native PDF text, OCR and selectively grounded context.
+2. V2 production workflow validates and persists the claim/analysis/review tasks, then returns the fixed snapshot.
+3. A durable report job builds source-addressed evidence and deterministic checks.
+4. `INSURANCE V2 — AUDITED REPORT` loads scoped evidence, calls the analyst, validates proposals, calls the semantic auditor and invokes the backend publication gate.
+5. Error handling, review synchronization and read-only evidence search use separate V2 workflows and authenticated V2 webhook paths.
+
+Models run locally. The reader may reuse the original installation's Python OCR environment/model caches, while document IDs, credentials, storage and service port remain isolated.
+
+## Development and setup
+
+This branch is `codex/intellisure-v2`; do not merge it into the original deployment without a migration review. Runtime secrets, uploads, accounts, databases, backups, QA fixtures and model weights are ignored by Git.
+
+`configure_v2.py` prepares private local configuration. `prepare_v2_n8n.py` prepares five inactive workflow imports with fresh IDs and credential bindings. `deploy_local_v2.py` is a maintenance command for the existing Windows installation with its `insurance-postgres` container and n8n npm installation: it provisions only the V2 database/role, checks for active executions, backs up n8n, imports through its official CLI, publishes the V2 workflows and restarts n8n. `--report-only` and `--main-only` limit workflow updates. It is not a generic cloud installer. `compose.yaml` is a separate-container template using its own name/volume and port 5434; it is not used by the current shared-container deployment. Fresh standalone configuration uses 5434, while the already provisioned local V2 explicitly uses 5433. The local original backend/launcher must exist for that maintenance command; a standalone cloud deployment is outside this edition.
+
+Install base requirements before development. OCR remains an optional separate environment, as documented in `docs/DOCUMENT_READER_AR.txt`. Do not reuse the original `.env`, `local-config.json`, accounts or claim storage for V2.
 
 ## Verification
 
 ```powershell
-.\.venv\Scripts\python.exe test_accounts.py
+python test_accounts.py
+python test_document_reader.py
+python test_quality.py
+python test_reliability.py
+python test_v2_engine.py
+python test_v2_http.py
 node test_account_ui.js
 node test_evidence_review.js
 node test_review_center.js
-```
-
-Account tests use isolated synthetic data; UI tests use a simulated DOM. These are not substitutes for authenticated browser review or independent model-quality evaluation. Node.js and a free localhost port are required for the relevant tests.
-
-## Data and secrets
-
-This repository intentionally contains **no** account database, claims database, uploaded customer files, live integration keys, session cookies, n8n credential exports, personal backups or execution logs. `database/schema.sql` contains schema only.
-
-`setup_local.py` generates private `local-config.json` and `.env` files. `setup_n8n.py` creates ignored local credential/import files. Keep these private. Back up the live SQLite database consistently together with uploads, and back up PostgreSQL and n8n separately. The repository alone does not restore an existing deployment.
-
-## Known limits
-
-- Single-computer deployment; not a hardened public SaaS or multi-user administration product.
-- OCR and small-model field extraction are preliminary; unfamiliar formats, handwriting and complex tables still need human review.
-- Review actions synchronize through a durable outbox; outages appear as pending synchronization until retried.
-- No complete production malware scanning, file encryption or automatic cross-database backup policy.
-- Native PDF display can depend on browser settings; extracted text remains available.
-
-Offline Arabic documentation: [workflow guide](docs/WORKFLOW_GUIDE_AR.html), [platform connection](docs/PLATFORM_CONNECTION_AR.html), [layout preview](docs/LAYOUT_PREVIEW.html). Workflow links in these presentation snapshots refer to the original local installation; use the workflow ID generated for your installation.
-
-## Review center and public demo
-
-The review queue shows the entered client reference, claim and policy identifiers, source-document count and reasons for human review. Search or filter the queue, then open the exact claim and its evidence before recording a review action with a mandatory reason. Deep links use `#review` and `#review/<case-id>`. Approval/rejection records a local review state, not an insurer coverage or payment decision.
-
-[Try the independent public demo](https://intellisure-insurance-demo.savorycord.chatgpt.site). It uses bundled synthetic documents and browser-session simulation only; it does not call a local server, n8n, PostgreSQL or an external model. Demo source and synthetic assets are in `demo/`; the same review-center JavaScript and CSS are used by both interfaces.
-
-## Optional local OCR and vision reader
-
-On Windows, run `powershell -File install_document_reader.ps1` after installing the base application. This installs pinned PaddleOCR/PaddlePaddle into `.ocr-venv` and downloads `qwen3-vl:2b-instruct` when Ollama is installed. Model downloads and local compute/storage are required; there is no paid API dependency. The launcher starts the loopback-only document reader on port 8767. The original application still works without it, with explicit review warnings for pages it cannot read.
-
-The backend keeps native PDF text, applies Arabic/English OCR to sparse/scanned pages or images, and uses the local vision model selectively for missing fields. It preserves quotes, page numbers and OCR boxes. Model proposals require matching text and an appropriate field label; this is evidence grounding, not independent verification. Conflicting policy IDs, vehicle IDs or dates remain unresolved for review. The reader does not automatically extract every invoice table or all pages with a vision model.
-
-Preparation is a durable background task before the n8n intake. The reliability upgrade orders review-task writes before result delivery. The UI shows a preparing state and links extracted-field quotes to their source page. Original uploads and previous results remain intact. The public static demo continues to simulate the workflow and does not run OCR or connect to the local reader.
-
-Run `python test_document_reader.py` for grounding/date/mixed-language tests. The account suite also checks asynchronous preparation and recovery. See [Arabic operation and limits](docs/DOCUMENT_READER_AR.txt).
-
-## Reliability upgrade and read-only review assistant
-
-The production graph registers the reserved claim/version, completes review-task writes before delivery, and routes node failures to a local error workflow. PostgreSQL keeps immutable claim revisions and the latest corrected fields. Review actions include an expected version, actor and reason; the outbox resolves current tasks and cancels older tasks without deleting their history. A task inserted late cannot reopen a reviewed version.
-
-The review assistant is a separate n8n Tools Agent with case-scoped read-only HTTP tools. A separate chain formats a schema-constrained draft, and the backend verifies each citation against source text actually returned by its tools. The local model is `qwen3-vl:2b-instruct`. No model can approve coverage or payment, edit claims or run SQL through assistant tools. A valid quote is not proof of document authenticity or OCR accuracy.
-
-Fresh installation uses the updated schema and `setup_n8n.py` to import four inactive workflows with newly generated IDs/credentials. Publish the production workflow, error handler and review synchronization workflow; publish the assistant when its local model is available. Keep `insurance-explainer.json` inactive/presentation-only to avoid duplicate webhook paths. Existing installations must back up their databases before applying `database-reliability.sql`; the current original installation has already been migrated.
-
-Native PDF text is preserved. OCR covers image-only storage files even without filename extensions, and large image regions on mixed pages. Low-confidence text is not promoted to a field by the model. Motor claims are the supported automated domain; other types require a specialist path. Invoice arithmetic checks apply only to clearly parsed single-currency rows without tax/discount adjustments; unfamiliar layouts remain manual review.
-
-Additional checks:
-
-```powershell
-python test_quality.py
-python test_reliability.py
 node test_workflow_reliability.js
 node test_reliability_ui.js
+node test_v2_ui.js
+node test_v2_workflows.js
 ```
 
-Synthetic regression checks do not establish accuracy on all real-world documents. See [Arabic upgrade and operation notes](docs/RELIABILITY_UPGRADE_AR.txt).
+These include real HTTP tests on isolated temporary data, deterministic/adversarial gate tests, UI contract checks and n8n expression/schema checks. The five bundled synthetic PDFs have also exercised the actual local preparation, PostgreSQL, n8n and report pipeline. Synthetic checks do not establish accuracy on arbitrary customer files. Browser QA uses a temporary synthetic account, never an owner account in V2.
+
+The public static demo on the main branch remains an independent simulation and does not run this local V2 pipeline.
+
+Arabic guides: [daily use](docs/V2_USER_GUIDE_AR.txt), [development study](docs/V2_DEVELOPMENT_STUDY_AR.html). The study describes the target design; the publication restrictions above reflect actual evaluation findings.

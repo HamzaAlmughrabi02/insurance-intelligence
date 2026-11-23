@@ -7,6 +7,7 @@ import auth_sessions
 import document_reader
 import quality
 import reliability
+import v2_reports
 from pypdf import PdfReader
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -15,9 +16,13 @@ if not CONFIG.exists():
  CONFIG.write_text(json.dumps({k:secrets.token_urlsafe(32) for k in ('INSURANCE_API_TOKEN','N8N_DOCUMENT_TOKEN','N8N_CALLBACK_TOKEN','N8N_OUTBOUND_TOKEN')},indent=2))
 cfg=json.loads(CONFIG.read_text())
 os.environ.update(cfg)
-os.environ.setdefault('N8N_WEBHOOK_URL','http://127.0.0.1:5678/webhook/insurance-web-intake')
-PORT=int(os.environ.get('PORT','8766'))
+os.environ.setdefault('N8N_WEBHOOK_URL','http://127.0.0.1:5678/webhook/insurance-v2-web-intake')
+PORT=int(os.environ.get('PORT','8786'))
+_envfile=ROOT/'.env'
+_dbsettings=dict(line.split('=',1) for line in _envfile.read_text().splitlines() if '=' in line and not line.startswith('#')) if _envfile.exists() else {}
+DATABASE_PORT=int(_dbsettings.get('POSTGRES_PORT','5433'))
 reliability.BASE=base;reliability.CFG=cfg
+v2_reports.configure(base,cfg)
 base.DATA=Path(os.environ.get('INSURANCE_DATA_DIR',str(ROOT/'data')));base.DB=base.DATA/'app.sqlite3';base.UPLOADS=base.DATA/'uploads'
 
 def init():
@@ -31,23 +36,29 @@ CREATE TABLE IF NOT EXISTS result_history(job_id TEXT PRIMARY KEY,case_id TEXT N
 CREATE TABLE IF NOT EXISTS corrections(case_id TEXT PRIMARY KEY,version INTEGER NOT NULL DEFAULT 1,fields TEXT NOT NULL DEFAULT '{}');''')
   c.execute('''CREATE TABLE IF NOT EXISTS document_preparations(case_id TEXT PRIMARY KEY,version INTEGER NOT NULL,fields TEXT NOT NULL,actor TEXT NOT NULL,status TEXT NOT NULL)''')
  reliability.init()
+ v2_reports.init()
 
 def extract(doc):
  path=Path(doc['path']).resolve()
  if path.parent!=base.UPLOADS.resolve():raise ValueError('File outside upload directory')
  out={'document_id':doc['id'],'name':doc['original_name'],'sha256':doc['sha256'],'pages':[],'method':'native_pdf','status':'ok','uncertainties':[]}
  try:
+  if doc.get('sha256') and base.hashlib.sha256(path.read_bytes()).hexdigest()!=doc['sha256']:
+   out.update(status='requires_review',method='integrity_failed');out['uncertainties'].append('DOCUMENT_HASH_MISMATCH');return out
   ext=Path(doc['original_name']).suffix.lower()
   if ext=='.pdf':
    reader=PdfReader(path)
+   out['page_count']=len(reader.pages)
    if len(reader.pages)>100:raise ValueError('Page limit exceeded')
    ocr_pages=0
    for i,p in enumerate(reader.pages):
     text=p.extract_text() or ''
-    page={'page':i+1,'text':text[:20000],'method':'native_pdf'}
+    page={'page':i+1,'text':text[:20000],'method':'native_pdf','read_flags':[]}
+    if len(text)>20000:page['read_flags'].append('TEXT_TRUNCATED')
     if len(text)>20000:out['uncertainties'].append('TEXT_TRUNCATED')
     if document_reader.needs_ocr(text) or document_reader.page_has_images(p):
      if ocr_pages>=10:
+      page['read_flags'].append('OCR_PAGE_LIMIT')
       out['uncertainties'].append('OCR_PAGE_LIMIT: remaining pages require manual review')
      else:
       ocr_pages+=1
@@ -55,8 +66,8 @@ def extract(doc):
        result=document_reader.request('ocr',doc['id'],i+1,cfg['N8N_DOCUMENT_TOKEN'],lang='ar')
        if result.get('text','').strip() and (not text.strip() or result.get('confidence',0)>=.8):
         page.update(result);page['native_text']=text[:20000];out['method']='hybrid_pdf_ocr'
-       if result.get('confidence',0)<.8:out['uncertainties'].append('OCR_LOW_CONFIDENCE: page '+str(i+1))
-      except Exception:out['uncertainties'].append('OCR_UNAVAILABLE: page '+str(i+1))
+       if result.get('confidence',0)<.8:out['uncertainties'].append('OCR_LOW_CONFIDENCE: page '+str(i+1));page['read_flags'].append('OCR_LOW_CONFIDENCE')
+      except Exception:out['uncertainties'].append('OCR_UNAVAILABLE: page '+str(i+1));page['read_flags'].append('OCR_UNAVAILABLE')
     out['pages'].append(page)
   elif ext=='.xlsx':
    from openpyxl import load_workbook
@@ -64,6 +75,7 @@ def extract(doc):
    with zipfile.ZipFile(path) as z:
     if sum(x.file_size for x in z.infolist())>50*1024*1024:raise ValueError('Expanded workbook too large')
    wb=load_workbook(path,read_only=True,data_only=True)
+   out['page_count']=len(wb.worksheets)
    for s in wb.worksheets[:10]:
     text='\n'.join(' | '.join(str(v or '') for v in row) for row in s.iter_rows(max_row=1000,max_col=30,values_only=True))
     out['pages'].append({'page':s.title,'text':text[:20000]})
@@ -72,6 +84,7 @@ def extract(doc):
   else:
    from PIL import Image
    with Image.open(path) as image:image.verify()
+   out['page_count']=1
    try:
     result=document_reader.request('ocr',doc['id'],1,cfg['N8N_DOCUMENT_TOKEN'],lang='ar')
     out['pages']=[{'page':1,**result}];out['method']='paddleocr'
@@ -135,8 +148,9 @@ def build(case_id,version,fields):
   else:field_sources[key]=[{'document_id':e['document_id'],'page':p['page']} for e in evidence for p in e['pages'] if str(value) and str(value) in p['text']]
  return {'schema_version':'1.0','event_id':job,'event_type':'claim.submitted','job_id':job,'claim_id':case_id,'claim_version':version,'correlation_id':job,'occurred_at':base.now(),'claim_data':claim,'web_integration':True,'case_id':case_id,'evidence':evidence,'document_flags':flags,'field_sources':field_sources,'field_quality':quality.field_quality(claim,choices,fields),'document_findings':document_findings,'repair_items':repair_items}
 
-class Handler(reliability.ReliabilityMixin,auth_sessions.AuthMixin,base.Handler):
+class Handler(v2_reports.ReportMixin,reliability.ReliabilityMixin,auth_sessions.AuthMixin,base.Handler):
  def body(self):
+  if hasattr(self,'_v2_cached_body'):return self._v2_cached_body
   try:
    n=int(self.headers.get('Content-Length','0'))
    if not 0<n<=base.MAX_SIZE:self.fail(413,'Invalid request size');return None
@@ -172,15 +186,15 @@ class Handler(reliability.ReliabilityMixin,auth_sessions.AuthMixin,base.Handler)
     with urllib.request.urlopen('http://127.0.0.1:5678/healthz',timeout=1) as response:n8n=response.status==200
    except Exception:pass
    try:
-    with socket.create_connection(('127.0.0.1',5433),timeout=1):database=True
+    with socket.create_connection(('127.0.0.1',DATABASE_PORT),timeout=1):database=True
    except OSError:pass
    reader=False;workflow_ready=False
    try:
-    req=urllib.request.Request('http://127.0.0.1:5678/webhook/insurance-readiness',headers={'Authorization':'Bearer '+cfg['N8N_OUTBOUND_TOKEN']})
+    req=urllib.request.Request('http://127.0.0.1:5678/webhook/insurance-v2-readiness',headers={'Authorization':'Bearer '+cfg['N8N_OUTBOUND_TOKEN']})
     with urllib.request.urlopen(req,timeout=3) as response:workflow_ready=json.load(response).get('ready') is True
    except Exception:pass
    try:
-    with urllib.request.urlopen('http://127.0.0.1:8767/health',timeout=1) as response:reader=response.status==200
+    with urllib.request.urlopen('http://127.0.0.1:8787/health',timeout=1) as response:reader=response.status==200
    except Exception:pass
    return self.reply(200,{'n8n_reachable':n8n,'database_port_reachable':database,'document_reader_reachable':reader,'workflow_ready':workflow_ready,'ready':n8n and database and workflow_ready})
   if p.startswith('/api/cases/') and p.rsplit('/',1)[-1] in ('jobs','history'):
@@ -344,5 +358,6 @@ if __name__=='__main__':
  threading.Thread(target=worker,daemon=True).start()
  threading.Thread(target=preparation_worker,daemon=True).start()
  threading.Thread(target=reliability.sync_worker,daemon=True).start()
+ threading.Thread(target=v2_reports.worker,daemon=True).start()
  print(f'Insurance integration: http://127.0.0.1:{PORT}',flush=True)
  base.ThreadingHTTPServer(('127.0.0.1',PORT),Handler).serve_forever()

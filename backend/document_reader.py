@@ -5,7 +5,7 @@ from datetime import datetime
 
 def request(operation, document_id, page, token, **extra):
     body = dict(document_id=document_id, page=page, **extra)
-    url=os.environ.get('INSURANCE_READER_URL','http://127.0.0.1:8767')
+    url=os.environ.get('INSURANCE_READER_URL','http://127.0.0.1:8787')
     if urlsplit(url).hostname not in ('127.0.0.1','localhost'):raise ValueError('Reader must be local')
     req = urllib.request.Request(url+'/' + operation,
         data=json.dumps(body).encode(), headers={'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token})
@@ -44,6 +44,14 @@ def parse_date(value):
             pass
     return ''
 
+def valid_field_value(field,value):
+    value=normalize(value)
+    if field=='policy_number':
+        return bool(re.fullmatch(r'[A-Za-z\u0600-\u06ff0-9][A-Za-z\u0600-\u06ff0-9/_-]{2,79}',value) and (re.search(r'\d',value) or re.fullmatch(r'[A-Z]{2,12}[-/_][A-Z0-9/_-]{2,60}',value)))
+    if field=='vehicle_plate':
+        return bool(2<=len(value)<=20 and re.search(r'\d',value) and re.fullmatch(r'[A-Za-z\u0600-\u06ff0-9 -]+',value) and not re.search(r'\bVIN\b|insured|policy|vehicle|toyota|coverage',value,re.I))
+    return bool(value)
+
 def candidates(evidence):
     result = {}
     patterns = {
@@ -56,15 +64,21 @@ def candidates(evidence):
             if not usable_page(page):
                 continue
             text = unicodedata.normalize('NFKC', page.get('text', ''))
+            reversed_patterns={
+                'policy_number':r'([A-Za-z\u0600-\u06ff0-9/_-]{3,80})[ \t]+(?:Policy[ \t]*(?:number|no\.?|#)|رقم[ \t]*(?:الوثيقة|البوليصة))',
+                'vehicle_plate':r'([^\n:：]{2,40})[ \t]+(?:Vehicle registration|Registration|License plate|رقم[ \t]*(?:المركبة|اللوحة))',
+                'accident_date':r'([^\n]{6,40})[ \t]+(?:Incident date|Date of incident|Accident date|تاريخ[ \t]*الحادث)'}
             for field, pattern in patterns.items():
-                for match in re.finditer(pattern, text, re.I):
+                matches=[(m,'label_match') for m in re.finditer(pattern,text,re.I)]
+                if field in reversed_patterns:matches.extend((m,'reverse_label_match') for m in re.finditer(reversed_patterns[field],text,re.I))
+                for match,source in matches:
                     printed = match.group(1).strip(' :：\t\r\n')
                     value = parse_date(printed) if field == 'accident_date' else printed
-                    if not value:
+                    if not value or not valid_field_value(field,value):
                         continue
                     result.setdefault(field, []).append({'value': value, 'quote': match.group(0).strip(),
                         'printed_value': printed, 'document_id': doc['document_id'], 'page': page['page'],
-                        'method': page.get('method', doc.get('method')), 'source': 'label_match'})
+                        'method': page.get('method', doc.get('method')), 'source': source})
     return result
 
 def grounded_proposals(context, page):
@@ -98,7 +112,7 @@ def grounded_proposals(context, page):
         if field == 'accident_date' and not re.search(r'incident|accident|الحادث', quote, re.I):
             continue
         final = parse_date(value) if field == 'accident_date' else item['value'].strip()
-        if final:
+        if final and valid_field_value(field,final):
             accepted.append(dict(field=field, value=final, printed_value=item['value'], quote=quote,
                 page=page['page'], method=page.get('method'), source='vision_grounded_quote', model=context.get('model')))
     return accepted

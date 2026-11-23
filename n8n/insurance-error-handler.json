@@ -1,5 +1,4 @@
 {
-  "name": "INSURANCE — LOCAL ERROR HANDLER",
   "nodes": [
     {
       "id": "15b955be-d502-4bff-9334-73d557f87bbc",
@@ -87,7 +86,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "http://127.0.0.1:8766/api/integrations/n8n/error",
+        "url": "http://127.0.0.1:8786/api/integrations/n8n/error",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -118,10 +117,11 @@
   "settings": {
     "executionOrder": "v1"
   },
+  "name": "INSURANCE V2 — LOCAL ERROR HANDLER",
   "active": false,
   "pinData": {},
   "staticData": null,
   "meta": {
-    "templateWorkflowId": "d8455bca-ccfe-4f1c-bec2-94c581ab0f40"
+    "templateWorkflowId": "7a7341255d9619a3"
   }
 }

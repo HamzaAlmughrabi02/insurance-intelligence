@@ -3,3 +3,4 @@ Pillow
 openpyxl
 argon2-cffi
 pypdfium2>=4.30,<6
+psutil>=7,<8

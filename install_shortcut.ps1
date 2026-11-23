@@ -5,7 +5,7 @@ $taskPython=Join-Path $taskRoot '.venv\Scripts\pythonw.exe'
 if (-not (Test-Path -LiteralPath $taskPython)) {$taskPython=Join-Path $env:USERPROFILE 'anaconda3\pythonw.exe'}
 if (-not (Test-Path -LiteralPath $taskPython)) {throw 'Python runtime not found'}
 $taskShell=New-Object -ComObject WScript.Shell
-$taskLinkPath=Join-Path $taskDesktop 'IntelliSure.lnk'
+$taskLinkPath=Join-Path $taskDesktop 'IntelliSure V2.lnk'
 $taskLink=$taskShell.CreateShortcut($taskLinkPath)
 $taskLink.TargetPath=$taskPython
 $taskLink.Arguments='"'+(Join-Path $taskRoot 'launcher.py')+'"'

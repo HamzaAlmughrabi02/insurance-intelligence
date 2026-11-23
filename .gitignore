@@ -27,3 +27,5 @@ launcher-status.json
 .runtime-libs/
 workflow-reliability*.json
 reliability-credentials.json
+
+qa_*.py

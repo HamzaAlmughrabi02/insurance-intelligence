@@ -1,5 +1,4 @@
 {
-  "name": "INSURANCE — REVIEW SYNCHRONIZATION",
   "nodes": [
     {
       "id": "771730f3-8a27-456e-8862-5ac9d588fb6a",
@@ -108,7 +107,7 @@
       ],
       "parameters": {
         "httpMethod": "POST",
-        "path": "insurance-review-sync",
+        "path": "insurance-v2-review-sync",
         "authentication": "headerAuth",
         "responseMode": "responseNode",
         "options": {}
@@ -174,10 +173,11 @@
   "settings": {
     "executionOrder": "v1"
   },
+  "name": "INSURANCE V2 — REVIEW SYNCHRONIZATION",
   "active": false,
   "pinData": {},
   "staticData": null,
   "meta": {
-    "templateWorkflowId": "55f1e1b8-3189-45f8-a479-1a685fcf9efd"
+    "templateWorkflowId": "5fc8604cdb2d6e48"
   }
 }

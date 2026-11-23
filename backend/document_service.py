@@ -186,5 +186,6 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(503, {'error': 'Document engine unavailable'})
 
 if __name__ == '__main__':
-    print('Document reader: http://127.0.0.1:8767', flush=True)
-    ThreadingHTTPServer(('127.0.0.1', int(os.environ.get('INSURANCE_READER_PORT','8767'))), Handler).serve_forever()
+    port=int(os.environ.get('INSURANCE_READER_PORT','8787'))
+    print('V2 document reader: http://127.0.0.1:'+str(port), flush=True)
+    ThreadingHTTPServer(('127.0.0.1',port), Handler).serve_forever()

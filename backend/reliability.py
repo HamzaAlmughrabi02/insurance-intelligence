@@ -38,7 +38,7 @@ def review_once():
   if not event:return
   c.execute("UPDATE review_events SET status='sending',attempts=attempts+1 WHERE event_id=?",(event['event_id'],))
  try:
-  req=urllib.request.Request('http://127.0.0.1:5678/webhook/insurance-review-sync',data=event['payload'].encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+CFG['N8N_OUTBOUND_TOKEN']})
+  req=urllib.request.Request('http://127.0.0.1:5678/webhook/insurance-v2-review-sync',data=event['payload'].encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+CFG['N8N_OUTBOUND_TOKEN']})
   with urllib.request.urlopen(req,timeout=25) as r:ack=json.load(r)
   if ack.get('event_id')!=event['event_id'] or ack.get('status')!='synced':raise ValueError('Invalid review acknowledgment')
   with BASE.conn() as c:
@@ -111,7 +111,7 @@ def finish(request_id,raw):
   valid=isinstance(answer,str) and 0<len(answer)<=5000 and citations and not forbidden
   c.execute("UPDATE assistant_requests SET status=? WHERE id=?",('completed' if valid else 'insufficient_evidence',request_id))
   BASE.event(c,r['case_id'],'assistant_response',r['actor'],json.dumps({'request_id':request_id,'version':r['version'],'tool_calls':r['calls'],'citations':len(citations),'accepted':bool(valid)}))
- return {'status':'draft' if valid else 'insufficient_evidence','answer':answer if valid else 'لم أجد إجابة بمصادر كافية. راجع المستندات الأصلية أو حدّد سؤالك أكثر.','citations':citations if valid else [],'version':r['version'],'notice':'مسودة مساعد للمراجعة؛ الاقتباس لا يثبت صحة المستند أو استحقاق المطالبة.'}
+ return {'status':'quoted_evidence' if valid else 'insufficient_evidence','answer':'اقتباسات من الأدلة المسترجعة؛ راجع علاقتها بسؤالك:\n\n'+'\n\n'.join(ref['quote'] for ref in citations) if valid else 'لم أجد إجابة بمصادر كافية. راجع المستندات الأصلية أو حدّد سؤالك أكثر.','citations':citations if valid else [],'version':r['version'],'notice':'V2 يعرض اقتباسات أصلية فقط في البحث الحر. الاستنتاجات تمر بمسار التقرير المدقّق. الاقتباس لا يثبت صحة المستند أو استحقاق المطالبة.'}
 
 class ReliabilityMixin:
  def internal(self):
@@ -198,7 +198,7 @@ class ReliabilityMixin:
      request_id=secrets.token_urlsafe(24)
      c.execute('INSERT INTO assistant_requests(id,case_id,version,question,actor,expires) VALUES(?,?,?,?,?,?)',(request_id,case,version(c,case),question.strip(),self.actor,time.time()+150))
     payload={'request_id':request_id,'question':question.strip()}
-    req=urllib.request.Request('http://127.0.0.1:5678/webhook/insurance-review-assistant',data=json.dumps(payload).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+CFG['N8N_OUTBOUND_TOKEN']})
+    req=urllib.request.Request('http://127.0.0.1:5678/webhook/insurance-v2-review-assistant',data=json.dumps(payload).encode(),headers={'Content-Type':'application/json','Authorization':'Bearer '+CFG['N8N_OUTBOUND_TOKEN']})
     with urllib.request.urlopen(req,timeout=140) as response:answer=json.load(response)
     if answer.get('status') not in ('draft','insufficient_evidence'):raise ValueError('Invalid assistant reply')
     return self.reply(200,answer)

@@ -58,6 +58,8 @@ try:
  check('matching_reserved_result_accepted',code==200)
  result={'claim_version':2,'extracted':{},'evidence':[e]}
  with app.base.conn() as c:c.execute("UPDATE cases SET status='review',result=? WHERE id=?",(json.dumps(result),case))
+ # V2 review additionally requires a completed checked report (isolated fixture).
+ with app.base.conn() as c:c.execute('INSERT INTO report_runs(id,case_id,version,job_id,status,stage,report,packet,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)',('legacy-regression',case,2,'legacy-regression','completed','PUBLISHED','{}','{}',app.base.now(),app.base.now()))
  check('stale_review_blocked',req('/api/cases/'+case+'/review',{'decision':'approve','note':'Synthetic review','version':1})[0]==409)
  code,review=req('/api/cases/'+case+'/review',{'decision':'approve','note':'Synthetic review','version':2})
  check('versioned_review_saved_with_outbox',code==200 and review['review_sync']=='pending')

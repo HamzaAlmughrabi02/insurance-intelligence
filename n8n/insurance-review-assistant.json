@@ -1,5 +1,4 @@
 {
-  "name": "INSURANCE — READ ONLY REVIEW ASSISTANT",
   "nodes": [
     {
       "id": "9f212280-2a09-4d42-b02a-67b74e4222bd",
@@ -204,7 +203,7 @@
       ],
       "parameters": {
         "httpMethod": "POST",
-        "path": "insurance-review-assistant",
+        "path": "insurance-v2-review-assistant",
         "authentication": "headerAuth",
         "responseMode": "responseNode",
         "options": {}
@@ -257,7 +256,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "http://127.0.0.1:8766/api/integrations/n8n/assistant-finish",
+        "url": "http://127.0.0.1:8786/api/integrations/n8n/assistant-finish",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -298,7 +297,7 @@
       "parameters": {
         "toolDescription": "Read fields, findings and document IDs for this request only.",
         "method": "POST",
-        "url": "http://127.0.0.1:8766/api/integrations/n8n/assistant-tool",
+        "url": "http://127.0.0.1:8786/api/integrations/n8n/assistant-tool",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -331,7 +330,7 @@
       "parameters": {
         "toolDescription": "Search text in this claim. Use short English/Arabic words; returns exact quotes.",
         "method": "POST",
-        "url": "http://127.0.0.1:8766/api/integrations/n8n/assistant-tool",
+        "url": "http://127.0.0.1:8786/api/integrations/n8n/assistant-tool",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -368,7 +367,7 @@
       "parameters": {
         "toolDescription": "Read one source page from this claim using a returned document ID and page.",
         "method": "POST",
-        "url": "http://127.0.0.1:8766/api/integrations/n8n/assistant-tool",
+        "url": "http://127.0.0.1:8786/api/integrations/n8n/assistant-tool",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -408,7 +407,7 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "http://127.0.0.1:8766/api/integrations/n8n/assistant-sources",
+        "url": "http://127.0.0.1:8786/api/integrations/n8n/assistant-sources",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendBody": true,
@@ -440,7 +439,8 @@
             }
           ]
         }
-      }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "id": "e0219656-95a0-4ac4-92c4-bc184208fc04",
@@ -602,10 +602,11 @@
   "settings": {
     "executionOrder": "v1"
   },
+  "name": "INSURANCE V2 — READ ONLY REVIEW ASSISTANT",
   "active": false,
   "pinData": {},
   "staticData": null,
   "meta": {
-    "templateWorkflowId": "68aa52f3-5eb4-455a-a828-147debd64b25"
+    "templateWorkflowId": "492ef4d1806c4da8"
   }
 }

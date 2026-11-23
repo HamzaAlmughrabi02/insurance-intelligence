@@ -2,7 +2,7 @@
 import ctypes,json,os,shutil,subprocess,sys,time,urllib.request,webbrowser
 from pathlib import Path
 ROOT=Path(__file__).resolve().parent
-BASE='http://127.0.0.1:8766'
+BASE='http://127.0.0.1:8786'
 NO_WINDOW=getattr(subprocess,'CREATE_NO_WINDOW',0)
 
 def status(stage,error=None):
@@ -23,6 +23,8 @@ def run(command,timeout=10):
  return subprocess.run(command,capture_output=True,timeout=timeout,creationflags=NO_WINDOW)
 
 def start_database():
+ task_env=dict(line.split('=',1) for line in (ROOT/'.env').read_text().splitlines() if '=' in line and not line.startswith('#'))
+ container=task_env.get('POSTGRES_CONTAINER','insurance-postgres')
  docker=shutil.which('docker')
  if not docker:raise RuntimeError('Docker Desktop غير مثبت أو غير متاح. افتحه ثم شغّل الاختصار مجددًا.')
  try:ready=run([docker,'info','--format','{{.ServerVersion}}'],5).returncode==0
@@ -37,10 +39,10 @@ def start_database():
     if run([docker,'info','--format','{{.ServerVersion}}'],3).returncode==0:break
    except subprocess.TimeoutExpired:pass
   else:raise RuntimeError('لم يكتمل تشغيل Docker. افتحه وانتظر جاهزيته ثم شغّل الاختصار مجددًا.')
- response=run([docker,'start','insurance-postgres'],30)
+ response=run([docker,'start',container],30)
  if response.returncode:raise RuntimeError('تعذر تشغيل حاوية insurance-postgres الموجودة. لم يتم إنشاء أو استبدال أي قاعدة.')
  for _ in range(30):
-  response=run([docker,'inspect','--format','{{.State.Health.Status}}','insurance-postgres'])
+  response=run([docker,'inspect','--format','{{.State.Health.Status}}',container])
   if response.returncode==0 and response.stdout.strip()==b'healthy':return
   time.sleep(1)
  raise RuntimeError('قاعدة البيانات لم تصبح جاهزة بعد. راجع Docker Desktop.')
@@ -57,12 +59,16 @@ def start_n8n():
  raise RuntimeError('لم يكتمل تشغيل n8n. راجع سجل n8n الأخير في مجلد المنصة.')
 
 def start_document_reader():
- if health('http://127.0.0.1:8767/health'):return
+ if health('http://127.0.0.1:8787/health'):return
  interpreter=ROOT/'.ocr-venv/Scripts/python.exe'
+ if not interpreter.exists():interpreter=ROOT.parent/'insurance-integration/.ocr-venv/Scripts/python.exe'
  if not interpreter.exists():return  # Optional on installations that have not installed OCR.
- spawn([str(interpreter),'-u',str(ROOT/'backend/document_service.py')],'document-reader')
+ reader_env=dict(os.environ,INSURANCE_READER_PORT='8787',INSURANCE_READER_DATA_DIR=str(ROOT/'data'))
+ shared=ROOT.parent/'insurance-integration/.cache'
+ if shared.is_dir():reader_env.update(PADDLE_HOME=str(shared/'paddle'),PADDLE_PDX_CACHE_HOME=str(shared/'paddlex'),HF_HOME=str(shared/'huggingface'))
+ spawn([str(interpreter),'-u',str(ROOT/'backend/document_service.py')],'document-reader',reader_env)
  for _ in range(20):
-  if health('http://127.0.0.1:8767/health'):break
+  if health('http://127.0.0.1:8787/health'):break
   time.sleep(.5)
  if not health('http://127.0.0.1:11434/api/tags'):
   ollama=shutil.which('ollama')
@@ -83,9 +89,9 @@ def main():
   import integration
   integration.init()
   current=health(BASE+'/api/health')
-  if current and not current.get('account_login'):raise RuntimeError('تعمل نسخة قديمة من الموقع على 8766؛ أعد تشغيل خادم المنصة لتطبيق تسجيل الدخول الجديد.')
+  if current and not current.get('account_login'):raise RuntimeError('تعمل نسخة قديمة من الموقع على 8786؛ أعد تشغيل خادم المنصة لتطبيق تسجيل الدخول الجديد.')
   if not current:
-   env=dict(os.environ,PORT='8766');env.pop('INSURANCE_LEGACY_API',None)
+   env=dict(os.environ,PORT='8786');env.pop('INSURANCE_LEGACY_API',None)
    spawn([str(Path(sys.executable).with_name('python.exe')),'-u',str(ROOT/'backend/integration.py')],'backend',env)
    for _ in range(30):
     if health(BASE+'/api/health'):break

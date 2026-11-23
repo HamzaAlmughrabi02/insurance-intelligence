@@ -1,15 +1,16 @@
+name: intellisure-v2
 services:
   postgres:
     image: postgres:17
-    container_name: insurance-postgres
+    container_name: insurance-v2-postgres
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-insurance_admin}
-      POSTGRES_DB: ${POSTGRES_DB:-insurance_ai}
+      POSTGRES_USER: ${POSTGRES_USER:-insurance_v2}
+      POSTGRES_DB: ${POSTGRES_DB:-insurance_ai_v2}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Generate .env with python setup_local.py}
     ports:
-      - "127.0.0.1:5433:5432"
+      - "127.0.0.1:5434:5432"
     volumes:
-      - insurance_pgdata:/var/lib/postgresql/data
+      - insurance_v2_pgdata:/var/lib/postgresql/data
       - ./database/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
@@ -18,4 +19,4 @@ services:
       retries: 12
     restart: unless-stopped
 volumes:
-  insurance_pgdata:
+  insurance_v2_pgdata:
