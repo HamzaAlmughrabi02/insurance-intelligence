@@ -56,6 +56,18 @@ def start_n8n():
   time.sleep(1)
  raise RuntimeError('لم يكتمل تشغيل n8n. راجع سجل n8n الأخير في مجلد المنصة.')
 
+def start_document_reader():
+ if health('http://127.0.0.1:8767/health'):return
+ interpreter=ROOT/'.ocr-venv/Scripts/python.exe'
+ if not interpreter.exists():return  # Optional on installations that have not installed OCR.
+ spawn([str(interpreter),'-u',str(ROOT/'backend/document_service.py')],'document-reader')
+ for _ in range(20):
+  if health('http://127.0.0.1:8767/health'):break
+  time.sleep(.5)
+ if not health('http://127.0.0.1:11434/api/tags'):
+  ollama=shutil.which('ollama')
+  if ollama:spawn([ollama,'serve'],'ollama')
+
 def main():
  import msvcrt
  lock=open(ROOT/'launcher.lock','a+b');lock.seek(0)
@@ -83,6 +95,7 @@ def main():
   if '--no-browser' not in sys.argv:webbrowser.open(BASE+('/#setup='+ticket if ticket else '/'))
   status('starting_database');start_database()
   status('starting_n8n');start_n8n()
+  status('starting_document_reader');start_document_reader()
   status('ready')
  except Exception as error:
   message=str(error) if isinstance(error,RuntimeError) else 'تعذر بدء التشغيل. راجع سجل الخدمات في مجلد المنصة.'

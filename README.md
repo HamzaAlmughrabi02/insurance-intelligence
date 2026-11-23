@@ -87,7 +87,7 @@ This repository intentionally contains **no** account database, claims database,
 ## Known limits
 
 - Single-computer deployment; not a hardened public SaaS or multi-user administration product.
-- No OCR; extraction patterns are limited and require human correction for unfamiliar documents.
+- OCR and small-model field extraction are preliminary; unfamiliar formats, handwriting and complex tables still need human review.
 - PostgreSQL review-task closure is not fully synchronized with the website review UI.
 - No complete production malware scanning, file encryption or automatic cross-database backup policy.
 - Native PDF display can depend on browser settings; extracted text remains available.
@@ -99,3 +99,13 @@ Offline Arabic documentation: [workflow guide](docs/WORKFLOW_GUIDE_AR.html), [pl
 The review queue shows the entered client reference, claim and policy identifiers, source-document count and reasons for human review. Search or filter the queue, then open the exact claim and its evidence before recording a review action with a mandatory reason. Deep links use `#review` and `#review/<case-id>`. Approval/rejection records a local review state, not an insurer coverage or payment decision.
 
 [Try the independent public demo](https://intellisure-insurance-demo.savorycord.chatgpt.site). It uses bundled synthetic documents and browser-session simulation only; it does not call a local server, n8n, PostgreSQL or an external model. Demo source and synthetic assets are in `demo/`; the same review-center JavaScript and CSS are used by both interfaces.
+
+## Optional local OCR and vision reader
+
+On Windows, run `powershell -File install_document_reader.ps1` after installing the base application. This installs pinned PaddleOCR/PaddlePaddle into `.ocr-venv` and downloads `qwen3-vl:2b-instruct` when Ollama is installed. Model downloads and local compute/storage are required; there is no paid API dependency. The launcher starts the loopback-only document reader on port 8767. The original application still works without it, with explicit review warnings for pages it cannot read.
+
+The backend keeps native PDF text, applies Arabic/English OCR to sparse/scanned pages or images, and uses the local vision model selectively for missing fields. It preserves quotes, page numbers and OCR boxes. Model proposals require matching text and an appropriate field label; this is evidence grounding, not independent verification. Conflicting policy IDs, vehicle IDs or dates remain unresolved for review. The reader does not automatically extract every invoice table or all pages with a vision model.
+
+Preparation is a durable background task before the existing n8n intake; original workflow connections are unchanged. The UI shows a preparing state and links extracted-field quotes to their source page. Original uploads and previous results remain intact. The public static demo continues to simulate the workflow and does not run OCR or connect to the local reader.
+
+Run `python test_document_reader.py` for grounding/date/mixed-language tests. The account suite also checks asynchronous preparation and recovery. See [Arabic operation and limits](docs/DOCUMENT_READER_AR.txt).

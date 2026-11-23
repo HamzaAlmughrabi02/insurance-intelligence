@@ -56,6 +56,23 @@ try:
  with app.base.conn() as c:actor=c.execute("SELECT actor FROM audit WHERE action='created' AND case_id=?",(case,)).fetchone()[0]
  check('audit_uses_account_identity',actor=='qa-owner')
 
+ # Preparing is durable and does not block the upload request while OCR/model work runs.
+ code,_,data=req('/api/cases/'+case+'/submit','POST',{},csrf=csrf)
+ check('submit_returns_background_preparation',code==202 and json.loads(data)['status']=='preparing')
+ check('duplicate_submit_during_preparation_blocked',req('/api/cases/'+case+'/submit','POST',{},csrf=csrf)[0]==409)
+ with app.base.conn() as c:
+  task=dict(c.execute('SELECT * FROM document_preparations WHERE case_id=?',(case,)).fetchone())
+  c.execute("UPDATE document_preparations SET status='running' WHERE case_id=?",(case,))
+ app.recover()
+ with app.base.conn() as c:state=c.execute('SELECT status FROM document_preparations WHERE case_id=?',(case,)).fetchone()[0]
+ check('interrupted_preparation_requeued',state=='queued')
+ from unittest.mock import patch
+ with patch.object(app,'build',return_value={'job_id':'WEB-'+case+'-v1','case_id':case}):app.prepare_pending_once()
+ with app.base.conn() as c:
+  job=c.execute('SELECT status FROM integration_jobs WHERE case_id=?',(case,)).fetchone()
+  state=c.execute('SELECT status FROM cases WHERE id=?',(case,)).fetchone()[0]
+ check('prepared_job_queued_once',job['status']=='queued' and state=='queued')
+
  with app.base.conn() as c:c.execute("UPDATE cases SET status='review',result=? WHERE id=?",(json.dumps({'extracted':{'policy_number':'POL-QA'},'flags':['HOOD_REPAIR_JOD_850_UNCERTAIN'],'claim_version':2}),case))
  code,_,data=req('/api/review-queue');queue=json.loads(data)
  check('review_queue_identifies_client_and_reason',code==200 and queue[0]['id']==case and queue[0]['client']=='QA ACCOUNT' and queue[0]['policy_number']=='POL-QA' and queue[0]['document_count']==1 and len(queue[0]['reasons'])==1)

@@ -1,0 +1,5 @@
+paddlepaddle==3.2.2
+paddleocr==3.3.2
+pypdfium2==5.15.2
+Pillow>=11,<14
+numpy>=1.26,<3

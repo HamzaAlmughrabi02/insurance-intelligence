@@ -20,3 +20,6 @@ qa-isolated/
 launcher-status.json
 *.lnk
 .DS_Store
+
+.ocr-venv/
+.cache/

@@ -59,6 +59,8 @@ async function retryCase(id){
 }
 const baseBadge=badge;
 badge=function(s){return s==='failed'?'<span class="pill review">تعذرت المعالجة</span>':s==='preparing'?'<span class="pill processing">استخراج المستندات</span>':baseBadge(s)};
+const readerBaseStatus=analysisStatus;
+analysisStatus=function(){const c=cases.find(x=>x.id===currentId)||cases.find(x=>x.status==='preparing');if(c?.status!=='preparing')return readerBaseStatus();return `<div class="notice" role="status"><strong>${esc(c.id)} · جارٍ قراءة المستندات</strong><p>نستخرج النص ونقرأ الصور عند الحاجة، ثم نجهّز البيانات للتحقق في n8n. قد تستغرق الصفحات الممسوحة وقتًا أطول.</p><p>يمكنك متابعة المعاملات؛ ستتحدث الحالة تلقائيًا.</p></div>`};
 const baseConnect=connect;
 connect=async function(){await baseConnect();if(connected)startPolling()};
 startPolling=function(){
@@ -170,7 +172,10 @@ function findingInfo(raw){
  if(/UNVERIFIED_POLICY_SOURCE|Policy source has not been verified/i.test(text))return {key:'policy-source',title:'مصدر الوثيقة لم يُوثّق بعد',detail:'الوثيقة المرفوعة لا تمنح توثيقًا تلقائيًا لمصدر السياسة. يلزم التحقق من السجل المعتمد.',field:'policy_number'};
  if(/POLICY_STATUS_REQUIRES_REVIEW|not confirmed as ACTIVE/i.test(text))return {key:'policy-status',title:'حالة الوثيقة تحتاج تأكيدًا',detail:'لم يؤكد التحقق أن حالة الوثيقة فعّالة. راجع الحالة من مصدرها المعتمد.',field:'policy_number'};
  if(/CONFLICTING_POLICY_NUMBERS/.test(text))return {key:'policy-conflict',title:'رقم الوثيقة لا يتطابق بين البيانات والمستندات',detail:'قارن رقم الوثيقة المدخل مع الأرقام الظاهرة في المصادر؛ لم تُعدّل البيانات تلقائيًا.',pattern:/POL-[A-Z0-9-]+/i,field:'policy_number'};
- if(/NO_READABLE_TEXT|UNREADABLE_DOCUMENT|IMAGE_OCR_NOT_AVAILABLE/.test(text))return {key:text,title:'تعذر استخراج نص قابل للمراجعة',detail:'اعرض الأصل للتدقيق اليدوي. الصور أو ملفات PDF الممسوحة قد تحتاج OCR غير متوفر حاليًا.'};
+ if(/OCR_LOW_CONFIDENCE|OCR_PAGE_LIMIT/.test(text))return {key:text,title:'قراءة المستند تحتاج تدقيقًا',detail:'قد تكون قراءة بعض الحروف أو الأرقام غير دقيقة، أو تجاوز المستند حد المعالجة. قارن النص بالصفحة الأصلية قبل الاعتماد.'};
+ if(/FIELD_CONFLICT/.test(text))return {key:text,title:'بيانات مختلفة بين المستندات',detail:'لم يُختر حقل متعارض تلقائيًا. قارن القيم في الأصول وأدخل التصحيح مع السبب.'};
+ if(/CONTEXT_MODEL_UNAVAILABLE/.test(text))return {key:text,title:'اكتمل الاستخراج دون مساعدة النموذج البصري',detail:'تعذر استخدام نموذج فهم الصفحة؛ احتفظنا بالقراءة والقواعد المتاحة. راجع الحقول غير المكتملة.'};
+ if(/NO_READABLE_TEXT|UNREADABLE_DOCUMENT|IMAGE_OCR_NOT_AVAILABLE|OCR_UNAVAILABLE/.test(text))return {key:text,title:'تعذر استخراج نص قابل للمراجعة',detail:'اعرض الأصل للتدقيق اليدوي. قد تكون القراءة الآلية غير متاحة أو لم تستطع قراءة الصفحة.'};
  if(/DATE_OUTSIDE_POLICY_PERIOD|outside the recorded policy period/i.test(text))return {key:'date',title:'تاريخ الحادث خارج فترة الوثيقة المسجلة',detail:'راجع تاريخ الحادث وفترة الوثيقة. هذه نتيجة مقارنة أولية وليست قرار تغطية.',field:'accident_date'};
  if(/claim_data\./.test(text)){const field=text.split('claim_data.')[1]?.split(/\s/)[0];return {key:text,title:'بيان مطلوب يحتاج استكمالًا',detail:fieldLabels[field]||text,field}}
  return {key:text,title:'ملاحظة تحتاج مراجعتك',detail:text};
@@ -193,10 +198,13 @@ resultPage=function(){
  return `<div class="toolbar"><span>${esc(c.id)} · ${esc(c.client)}</span>${badge(c.status)}</div><div class="review-workspace"><section class="card"><h2>نتيجة التحليل</h2><div id="detail" aria-live="polite"><p class="muted">جارٍ تحميل النتيجة…</p></div></section><section class="card" id="evidence-panel"><h2>المستندات والأدلة</h2><p class="muted">اختر اسم الملف لعرضه، أو انتقل إلى نصه المستخرج.</p><div id="docs" aria-live="polite"><p class="muted">جارٍ تحميل المستندات…</p></div></section></div>`;
 };
 renderDetail=function(c){
+ if(c.status==='preparing')return '<div class="notice" role="status">جارٍ قراءة المستندات وتجهيز إصدار التحليل. ستظهر النتيجة الجديدة بعد اكتمال المعالجة؛ الإصدارات السابقة محفوظة.</div>';
  const result=reviewResult(c);if(!c.result)return previousDetailRenderer(c);
  const fields=result.extracted||{};const findings=collectFindings(result);
  const local=result.analysis_type==='LOCAL_RULES_AND_DOCUMENT_EVIDENCE';
  let html=`<p class="review-summary">${esc(local?'اكتملت الفحوص الأولية. راجع البيانات المستخرجة والملاحظات المرتبطة بمصادرها قبل استكمال المراجعة.':result.summary||'وصلت نتيجة أولية تحتاج مراجعتك.')}</p><h2>البيانات المستخرجة</h2>${Object.entries(fields).map(([key,value])=>`<div class="review-kv" id="review-field-${esc(key)}"><span>${esc(fieldLabels[key]||key)}</span><strong dir="auto">${esc(key==='claim_type'&&value==='motor'?'مطالبة مركبة':typeof value==='object'?JSON.stringify(value):value)}</strong></div>`).join('')}<section class="review-findings"><h2>ملاحظات تحتاج تحققًا <small class="muted">${findings.length}</small></h2>${findings.map((f,i)=>`<button type="button" class="finding-button" onclick="showReviewFinding(${i})" aria-controls="finding-detail"><span class="finding-index">${i+1}</span><span class="finding-body"><strong>${esc(f.title)}</strong><small>${esc(f.detail)}</small></span><span class="finding-arrow" aria-hidden="true">←</span></button>`).join('')||'<p class="muted">لم ترد ملاحظات منفصلة. تبقى المراجعة البشرية مطلوبة.</p>'}<div id="finding-detail" tabindex="-1"></div></section>`;
+ const origins=Object.entries(result.field_sources||{}).filter(([key,sources])=>Array.isArray(sources)&&sources.some(s=>s.quote));
+ if(origins.length)html+=`<details class="review-history"><summary>مصادر البيانات المستخرجة</summary><p class="muted">اقتباسات من النص المقروء؛ قراءة OCR واقتراحات النموذج تحتاج مقارنة بالأصل.</p>${origins.map(([key,sources])=>{const source=sources.find(s=>s.quote);return `<section><button class="ghost" type="button" data-field="${esc(key)}" onclick="openExtractedFieldSource(this.dataset.field)">${esc(fieldLabels[key]||key)} · الصفحة ${esc(source.page)}</button><blockquote dir="auto">${esc(source.quote)}</blockquote><p class="muted">${source.source==='vision_grounded_quote'?'اقتراح نموذج مرتبط باقتباس':'استخراج من تسمية الحقل'} · ${source.method==='paddleocr'?'OCR':'نص المستند'}</p></section>`}).join('')}</details>`;
  const old=previousDetailRenderer(c);const correction=old.indexOf('<details style="margin-top:24px">');if(correction>=0)html+=old.slice(correction);
  return html;
 };
@@ -229,7 +237,9 @@ function renderEvidenceReader(){
  else if(ext==='pdf')body=`<iframe title="${esc('معاينة '+d.original_name)}" src="${url}#page=${Number(p?.page)||1}"></iframe>`;
  else if(['png','jpg','jpeg'].includes(ext))body=`<img src="${url}" alt="${esc(d.original_name)}">`;
  else body='<p class="reader-message">هذا النوع لا يملك عارضًا أصليًا داخل المتصفح. افتح «النص المستخرج» لمراجعته.</p>';
- $('evidence-reader').innerHTML=`<div class="reader-caption"><strong dir="auto">${esc(d.original_name)}</strong>${['pdf','png','jpg','jpeg'].includes(ext)?`<a href="${url}" target="_blank" rel="noopener noreferrer">فتح الأصل في تبويب مستقل ↗</a>`:''}</div><div class="evidence-reader">${body}</div>`;
+ const method=p?.method||e?.method;const methodLabel=method==='paddleocr'?'قراءة صورة باستخدام OCR':method==='native_pdf'?'نص أصلي من PDF':method==='openpyxl'?'نص جدول بيانات':'نص مستخرج';
+ const provenance=`<p class="muted">${esc(methodLabel)}${p?.confidence!==undefined?' · مؤشر التعرف على الحروف: '+Math.round(p.confidence*100)+'% (ليس ضمانًا لصحة الحقول)':''}${p?.method==='paddleocr'?' · قارن الأرقام بالأصل':''}</p>`;
+ $('evidence-reader').innerHTML=`<div class="reader-caption"><strong dir="auto">${esc(d.original_name)}</strong>${['pdf','png','jpg','jpeg'].includes(ext)?`<a href="${url}" target="_blank" rel="noopener noreferrer">فتح الأصل في تبويب مستقل ↗</a>`:''}</div>${provenance}<div class="evidence-reader">${body}</div>`;
 }
 function showReviewFinding(index){
  const s=evidenceReview;if(!s)return;const finding=s.findings[index];if(!finding)return;
@@ -242,6 +252,12 @@ function openFindingSource(findingIndex,matchIndex){
  const index=s.documents.findIndex(d=>d.id===m.document_id);if(index<0)return;
  const e=s.evidence.find(e=>e.document_id===m.document_id);const p=e.pages.findIndex(p=>String(p.page)===String(m.page));selectEvidence(index,'text',Math.max(0,p));
  $('evidence-panel').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
+}
+function openExtractedFieldSource(field){
+ const s=evidenceReview;if(!s)return;const source=(reviewResult(s.case).field_sources?.[field]||[]).find(x=>x.quote&&x.document_id);if(!source)return;
+ const index=s.documents.findIndex(d=>d.id===source.document_id);if(index<0)return;
+ const e=s.evidence.find(e=>e.document_id===source.document_id);const p=(e?.pages||[]).findIndex(p=>String(p.page)===String(source.page));
+ selectEvidence(index,'text',Math.max(0,p));$('evidence-panel').scrollIntoView({behavior:'smooth',block:'start'});
 }
 
 let reviewQueue=[],reviewQuery='',reviewCategory='all',reviewQueueRequest=0,reviewQueueTimer=null,reviewContext=false;

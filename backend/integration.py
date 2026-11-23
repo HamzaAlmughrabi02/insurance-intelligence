@@ -4,6 +4,7 @@ from pathlib import Path
 from datetime import datetime
 import server as base
 import auth_sessions
+import document_reader
 from pypdf import PdfReader
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -25,6 +26,7 @@ CREATE TABLE IF NOT EXISTS evidence(document_id TEXT PRIMARY KEY,case_id TEXT NO
 CREATE TABLE IF NOT EXISTS callbacks(job_id TEXT PRIMARY KEY,digest TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS result_history(job_id TEXT PRIMARY KEY,case_id TEXT NOT NULL,version INTEGER NOT NULL,result TEXT NOT NULL,created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS corrections(case_id TEXT PRIMARY KEY,version INTEGER NOT NULL DEFAULT 1,fields TEXT NOT NULL DEFAULT '{}');''')
+  c.execute('''CREATE TABLE IF NOT EXISTS document_preparations(case_id TEXT PRIMARY KEY,version INTEGER NOT NULL,fields TEXT NOT NULL,actor TEXT NOT NULL,status TEXT NOT NULL)''')
 
 def extract(doc):
  path=Path(doc['path']).resolve()
@@ -35,7 +37,22 @@ def extract(doc):
   if ext=='.pdf':
    reader=PdfReader(path)
    if len(reader.pages)>100:raise ValueError('Page limit exceeded')
-   for i,p in enumerate(reader.pages):out['pages'].append({'page':i+1,'text':(p.extract_text() or '')[:20000]})
+   ocr_pages=0
+   for i,p in enumerate(reader.pages):
+    text=p.extract_text() or ''
+    page={'page':i+1,'text':text[:20000],'method':'native_pdf'}
+    if len(text)>20000:out['uncertainties'].append('TEXT_TRUNCATED')
+    if document_reader.needs_ocr(text):
+     if ocr_pages>=10:
+      out['uncertainties'].append('OCR_PAGE_LIMIT: remaining pages require manual review')
+     else:
+      ocr_pages+=1
+      try:
+       result=document_reader.request('ocr',doc['id'],i+1,cfg['N8N_DOCUMENT_TOKEN'],lang='ar')
+       if result.get('text','').strip():page.update(result);out['method']='hybrid_pdf_ocr'
+       if result.get('confidence',0)<.8:out['uncertainties'].append('OCR_LOW_CONFIDENCE: page '+str(i+1))
+      except Exception:out['uncertainties'].append('OCR_UNAVAILABLE: page '+str(i+1))
+    out['pages'].append(page)
   elif ext=='.xlsx':
    from openpyxl import load_workbook
    import zipfile
@@ -50,8 +67,14 @@ def extract(doc):
   else:
    from PIL import Image
    with Image.open(path) as image:image.verify()
-   out.update(method='manual_image_review',status='requires_review');out['uncertainties'].append('IMAGE_OCR_NOT_AVAILABLE: review original image')
+   try:
+    result=document_reader.request('ocr',doc['id'],1,cfg['N8N_DOCUMENT_TOKEN'],lang='ar')
+    out['pages']=[{'page':1,**result}];out['method']='paddleocr'
+    if result.get('confidence',0)<.8:out['uncertainties'].append('OCR_LOW_CONFIDENCE: page 1')
+   except Exception:
+    out.update(method='manual_image_review',status='requires_review');out['uncertainties'].append('OCR_UNAVAILABLE: review original image')
   if not any(p['text'].strip() for p in out['pages']):out['status']='requires_review';out['uncertainties'].append('NO_READABLE_TEXT')
+  if out['uncertainties']:out['status']='requires_review'
  except Exception:
   out.update(status='requires_review',method='extraction_failed');out['uncertainties'].append('UNREADABLE_DOCUMENT')
  return out
@@ -68,10 +91,34 @@ def build(case_id,version,fields):
  try:date=datetime.strptime(date,'%d %b %Y').date().isoformat()
  except ValueError:date=''
  claim={'claim_number':case_id,'policy_number':match(r'Policy number\s*\n([^\n]+)'), 'claim_type':'motor','accident_date':date,'vehicle_plate':match(r'(?:Vehicle registration|Registration)\s*\n([^\n]+)'), 'incident_description':match(r'Claimant statement:\s*([^\n]+)') or case['notes']}
+ choices=document_reader.candidates(evidence)
+ # A single model request per document, with an overall case budget. Proposals never override corrections.
+ vision_budget=3
+ for e in evidence:
+  if not any(not choices.get(k) for k in ('policy_number','accident_date','vehicle_plate','incident_description')):break
+  if vision_budget<=0:break
+  pages=[p for p in e['pages'] if p.get('text','').strip()]
+  if not pages:continue
+  p=pages[0];vision_budget-=1
+  try:
+   context=document_reader.request('context',e['document_id'],p['page'],cfg['N8N_DOCUMENT_TOKEN'],text=p['text'])
+   accepted=document_reader.grounded_proposals(context,p)
+   e['context']={'model':context['model'],'status':'grounded_candidates_only','accepted_fields':accepted}
+   for proposal in accepted:
+    field=proposal.pop('field');proposal['document_id']=e['document_id'];choices.setdefault(field,[]).append(proposal)
+  except Exception:e['uncertainties'].append('CONTEXT_MODEL_UNAVAILABLE: deterministic extraction retained')
+ extraction_sources={}
+ extraction_flags=[]
+ for field,options in choices.items():
+  values={document_reader.normalize(o['value']) for o in options}
+  if len(values)>1 and field!='incident_description':
+   extraction_flags.append('FIELD_CONFLICT: '+field);claim[field]=''
+  elif options:
+   claim[field]=options[0]['value'];extraction_sources[field]=options
  claim.update(fields);claim['claim_number']=case_id
- flags=[u for e in evidence for u in e['uncertainties']]
+ flags=extraction_flags+[u for e in evidence for u in e['uncertainties']]
  policies=sorted(set(re.findall(r'\bPOL-[A-Z0-9-]+',text)))
- if len(policies)>1 or (policies and claim['policy_number'] not in policies):flags.append('CONFLICTING_POLICY_NUMBERS')
+ if len(policies)>1 or (policies and claim['policy_number'] and claim['policy_number'] not in policies):flags.append('CONFLICTING_POLICY_NUMBERS')
  if re.search(r'uncertain|discrepancy|not confirmed',text,re.I):flags.append('DOCUMENT_EVIDENCE_REQUIRES_REVIEW')
  if re.search(r'hood',text,re.I) and re.search(r'850',text):flags.append('HOOD_REPAIR_JOD_850_UNCERTAIN: compare invoice, incident report and inspection')
  with base.conn() as c:
@@ -81,6 +128,7 @@ def build(case_id,version,fields):
  for key,value in claim.items():
   if key in fields:field_sources[key]=[{'source':'supervisor_correction','version':version}]
   elif key=='claim_number':field_sources[key]=[{'source':'application_case_id'}]
+  elif key in extraction_sources:field_sources[key]=extraction_sources[key]
   else:field_sources[key]=[{'document_id':e['document_id'],'page':p['page']} for e in evidence for p in e['pages'] if str(value) and str(value) in p['text']]
  return {'schema_version':'1.0','event_id':job,'event_type':'claim.submitted','job_id':job,'claim_id':case_id,'claim_version':version,'correlation_id':job,'occurred_at':base.now(),'claim_data':claim,'web_integration':True,'case_id':case_id,'evidence':evidence,'document_flags':flags,'field_sources':field_sources}
 
@@ -123,7 +171,11 @@ class Handler(auth_sessions.AuthMixin,base.Handler):
    try:
     with socket.create_connection(('127.0.0.1',5433),timeout=1):database=True
    except OSError:pass
-   return self.reply(200,{'n8n_reachable':n8n,'database_port_reachable':database,'ready':n8n and database})
+   reader=False
+   try:
+    with urllib.request.urlopen('http://127.0.0.1:8767/health',timeout=1) as response:reader=response.status==200
+   except Exception:pass
+   return self.reply(200,{'n8n_reachable':n8n,'database_port_reachable':database,'document_reader_reachable':reader,'ready':n8n and database})
   if p.startswith('/api/cases/') and p.rsplit('/',1)[-1] in ('jobs','history'):
    if not self.auth():return
    table='integration_jobs' if p.endswith('/jobs') else 'result_history'
@@ -185,6 +237,11 @@ class Handler(auth_sessions.AuthMixin,base.Handler):
     if not r:return self.fail(404,'Case not found')
     if action=='retry':
      if r['status']!='failed':return self.fail(409,'Only failed cases may retry')
+     preparation=c.execute("SELECT * FROM document_preparations WHERE case_id=? AND status='failed'",(case,)).fetchone()
+     if preparation:
+      c.execute("UPDATE document_preparations SET status='queued' WHERE case_id=?",(case,))
+      c.execute("UPDATE cases SET status='preparing' WHERE id=?",(case,))
+      return self.reply(202,{'status':'preparing'})
      c.execute("UPDATE integration_jobs SET status='queued',attempts=0,next_try=0 WHERE case_id=? AND version=(SELECT MAX(version) FROM integration_jobs WHERE case_id=?) AND status='failed'",(case,case))
      c.execute("UPDATE cases SET status='queued' WHERE id=? AND status IN ('failed','processing')",(case,));return self.reply(202,{'status':'queued'})
     if action=='submit' and r['status']!='draft':return self.fail(409,'Only drafts may submit')
@@ -203,15 +260,34 @@ class Handler(auth_sessions.AuthMixin,base.Handler):
     # Serialize state reservation, preventing concurrent duplicate submissions.
     c.execute('INSERT OR REPLACE INTO corrections VALUES(?,?,?)',(case,version,json.dumps(fields)))
     c.execute("UPDATE cases SET status='preparing' WHERE id=?",(case,))
-   try:payload=build(case,version,fields)
-   except Exception:
-    with base.conn() as c:c.execute("UPDATE cases SET status='failed' WHERE id=?",(case,))
-    return self.fail(422,'Document preparation failed')
-   with base.conn() as c:
-    c.execute('INSERT INTO integration_jobs(job_id,case_id,version,payload,status) VALUES(?,?,?,?,?)',(payload['job_id'],case,version,json.dumps(payload),'queued'))
-    c.execute("UPDATE cases SET status='queued' WHERE id=?",(case,));base.event(c,case,'queued',self.actor,payload['job_id'])
-   return self.reply(202,{'status':'queued','job_id':payload['job_id']})
+    c.execute('INSERT OR REPLACE INTO document_preparations VALUES(?,?,?,?,?)',(case,version,json.dumps(fields),self.actor,'queued'))
+   return self.reply(202,{'status':'preparing','job_id':f'WEB-{case}-v{version}'})
   return super().do_POST()
+
+def prepare_pending_once():
+ with base.conn() as c:
+  c.execute('BEGIN IMMEDIATE')
+  task=c.execute("SELECT * FROM document_preparations WHERE status='queued' ORDER BY rowid LIMIT 1").fetchone()
+  if task:c.execute("UPDATE document_preparations SET status='running' WHERE case_id=?",(task['case_id'],))
+ if not task:return
+ try:
+  payload=build(task['case_id'],task['version'],json.loads(task['fields']))
+  with base.conn() as c:
+   c.execute('INSERT OR IGNORE INTO integration_jobs(job_id,case_id,version,payload,status) VALUES(?,?,?,?,?)',(payload['job_id'],task['case_id'],task['version'],json.dumps(payload),'queued'))
+   c.execute("UPDATE cases SET status='queued' WHERE id=?",(task['case_id'],))
+   c.execute("UPDATE document_preparations SET status='completed' WHERE case_id=?",(task['case_id'],))
+   base.event(c,task['case_id'],'queued',task['actor'],payload['job_id'])
+ except Exception:
+  with base.conn() as c:
+   c.execute("UPDATE cases SET status='failed' WHERE id=?",(task['case_id'],))
+   c.execute("UPDATE document_preparations SET status='failed' WHERE case_id=?",(task['case_id'],))
+   base.event(c,task['case_id'],'preparation_failed','system','Document preparation failed; originals retained')
+
+def preparation_worker():
+ while True:
+  try:prepare_pending_once()
+  except Exception:logging.exception('Preparation worker error')
+  time.sleep(1)
 
 def worker():
  while True:
@@ -242,7 +318,8 @@ def worker():
 
 def recover():
  with base.conn() as c:
-  preparing=c.execute("SELECT id FROM cases WHERE status='preparing'").fetchall()
+  c.execute("UPDATE document_preparations SET status='queued' WHERE status='running'")
+  preparing=c.execute("SELECT id FROM cases WHERE status='preparing' AND id NOT IN (SELECT case_id FROM document_preparations WHERE status='queued')").fetchall()
   for case in preparing:
    c.execute("UPDATE cases SET status=CASE WHEN result IS NULL THEN 'draft' ELSE 'review' END WHERE id=?",(case['id'],))
    base.event(c,case['id'],'preparation_recovered','system','Interrupted preparation; existing evidence retained')
@@ -256,5 +333,6 @@ if __name__=='__main__':
  init()
  recover()
  threading.Thread(target=worker,daemon=True).start()
+ threading.Thread(target=preparation_worker,daemon=True).start()
  print(f'Insurance integration: http://127.0.0.1:{PORT}',flush=True)
  base.ThreadingHTTPServer(('127.0.0.1',PORT),Handler).serve_forever()

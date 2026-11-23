@@ -16,3 +16,4 @@ jobs:
       - run: node test_account_ui.js
       - run: node test_evidence_review.js
       - run: node test_review_center.js
+      - run: python test_document_reader.py

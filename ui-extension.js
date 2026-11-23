@@ -47,6 +47,8 @@ async function retryCase(id){
 }
 const baseBadge=badge;
 badge=function(s){return s==='failed'?'<span class="pill review">تعذرت المعالجة</span>':s==='preparing'?'<span class="pill processing">استخراج المستندات</span>':baseBadge(s)};
+const readerBaseStatus=analysisStatus;
+analysisStatus=function(){const c=cases.find(x=>x.id===currentId)||cases.find(x=>x.status==='preparing');if(c?.status!=='preparing')return readerBaseStatus();return `<div class="notice" role="status"><strong>${esc(c.id)} · جارٍ قراءة المستندات</strong><p>نستخرج النص ونقرأ الصور عند الحاجة، ثم نجهّز البيانات للتحقق في n8n. قد تستغرق الصفحات الممسوحة وقتًا أطول.</p><p>يمكنك متابعة المعاملات؛ ستتحدث الحالة تلقائيًا.</p></div>`};
 const baseConnect=connect;
 connect=async function(){await baseConnect();if(connected)startPolling()};
 startPolling=function(){
