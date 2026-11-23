@@ -81,7 +81,7 @@ function caseStageMarkup(){
 }
 function renderCaseSection(){
  if(!$('case-main')||!caseData)return;
- const r=v2State?.report,readonly=v2State?.is_current===false;
+ const r=v2State?.report,readonly=v2State?.is_current===false||!['draft','review','failed'].includes(caseData.status);
  $('case-main').innerHTML=route.section==='report'?renderReportSection():route.section==='evidence'?renderEvidenceSection():route.section==='followup'?(r?v2Tasks():'<p>تظهر مهام الاستكمال عند اكتمال التقرير.</p>'):renderCaseHistory();
  $('case-main').querySelectorAll('form input,form select,form textarea,form button').forEach(el=>{if(readonly||(!isReviewer()&&!el.closest('#draft-upload')))el.disabled=true});
  restoreForms();
