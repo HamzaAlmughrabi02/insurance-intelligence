@@ -48,7 +48,7 @@ loadDetail=async function(id){
  const c=evidenceReview.case;if(c.status!=='review')return;
  if(typeof accountSession!=='undefined'&&accountSession?.user.role!=='admin')return;
  $('review-resolution')?.remove();
- $('detail').insertAdjacentHTML('beforeend',`<section class="review-resolution" id="review-resolution"><h2>تسجيل نتيجة المراجعة</h2><p>بعد قراءة الأدلة، سجّل ملاحظتك وسبب الإجراء. هذا يسجل حالة داخل المنصة ولا ينفذ قرار تغطية أو دفع لدى شركة التأمين.</p><label class="field">سبب الإجراء<textarea id="note-${esc(id)}" rows="3" maxlength="2000" placeholder="ما الذي راجعته؟ وما سبب الإجراء؟" required></textarea></label><div class="resolution-actions"><button class="primary" onclick="decide('${esc(id)}','approve')">تسجيل اعتماد المراجعة</button><button class="ghost" onclick="decide('${esc(id)}','reject')">تسجيل رفض المراجعة</button></div></section>`);
+ $('detail').insertAdjacentHTML('beforeend',`<section class="review-resolution" id="review-resolution"><h2>تسجيل نتيجة المراجعة</h2><p>راجع الأدلة، ثم سجّل نتيجة المراجعة وسببها. التسجيل هنا لا ينفّذ قرار تغطية أو صرف.</p><label class="field">سبب الإجراء<textarea id="note-${esc(id)}" rows="3" maxlength="2000" placeholder="ما الذي راجعته؟ وما سبب الإجراء؟" required></textarea></label><div class="resolution-actions"><button class="primary" onclick="decide('${esc(id)}','approve')">تسجيل اعتماد المراجعة</button><button class="ghost" onclick="decide('${esc(id)}','reject')">تسجيل عدم الاعتماد</button></div></section>`);
 };
 const reviewBaseRender=render;
 render=function(){reviewBaseRender();if(page==='review'&&connected)loadReviewQueue()};
