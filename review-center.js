@@ -27,19 +27,23 @@ async function loadReviewQueue(){
 }
 const reviewBaseGo=go;
 go=function(target){
+ reviewNavigation++;
  if(target==='review'){reviewContext=false;currentId='';history.pushState(null,'','#review')}
  else if(target!=='results'){reviewContext=false;if(location.hash.startsWith('#review'))history.replaceState(null,'',location.pathname+location.search)}
  reviewBaseGo(target);
 };
+let reviewNavigation=0;
 async function showReviewCase(id,push){
+ const navigation=++reviewNavigation,origin=typeof reviewUI!=='undefined'?reviewUI.navigate():null;
  try{
   const item=await api('/cases/'+encodeURIComponent(id));
+  if(navigation!==reviewNavigation||(origin!==null&&!reviewUI.latest(origin)))return;
   const index=cases.findIndex(c=>c.id===id);if(index<0)cases.push(item);else cases[index]={...cases[index],...item};
   currentId=id;reviewContext=true;if(push)history.pushState(null,'','#review/'+encodeURIComponent(id));reviewBaseGo('results');
- }catch(e){toast(e.message)}
+ }catch(e){if(navigation===reviewNavigation&&(origin===null||reviewUI.latest(origin)))toast(e.message)}
 }
 function openReviewCase(id){return showReviewCase(id,true)}
-function returnToReview(){reviewContext=false;currentId='';history.pushState(null,'','#review');reviewBaseGo('review')}
+function returnToReview(){reviewNavigation++;if(typeof reviewUI!=='undefined')reviewUI.navigate();reviewContext=false;currentId='';history.pushState(null,'','#review');reviewBaseGo('review')}
 const reviewBaseResultPage=resultPage;
 resultPage=function(){const c=cases.find(c=>c.id===currentId);return (reviewContext?'<button type="button" class="review-back" onclick="returnToReview()">العودة إلى قائمة المراجعة</button>':c?.status==='review'?`<button type="button" class="review-back" onclick="openReviewCase('${esc(c.id)}')">فتح هذه المعاملة في مركز المراجعة</button>`:'')+reviewBaseResultPage()};
 const reviewBaseLoadDetail=loadDetail;
@@ -53,7 +57,7 @@ loadDetail=async function(id){
 const reviewBaseRender=render;
 render=function(){reviewBaseRender();if(page==='review'&&connected)loadReviewQueue()};
 function restoreReviewRoute(){
- if(!connected)return;const match=location.hash.match(/^#review(?:\/([^/]+))?$/);if(!match){if(reviewContext||page==='review'){reviewContext=false;reviewBaseGo('home')}return}
+ if(!connected)return;reviewNavigation++;if(typeof reviewUI!=='undefined')reviewUI.navigate();const match=location.hash.match(/^#review(?:\/([^/]+))?$/);if(!match){if(reviewContext||page==='review'){reviewContext=false;reviewBaseGo('home')}return}
  if(match[1]){try{showReviewCase(decodeURIComponent(match[1]),false)}catch{reviewBaseGo('review')}}
  else{reviewContext=false;reviewBaseGo('review')}
 }

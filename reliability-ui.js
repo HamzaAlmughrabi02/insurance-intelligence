@@ -26,8 +26,8 @@ function openAssistantSource(id,page){
 const reviewedDecision=decide;
 decide=async function(id,decision){
  const note=$('note-'+id)?.value.trim();if(!note){toast('اكتب سبب المراجعة أولًا');return}
- const c=evidenceReview?.case;if(!c||c.id!==id){toast('أعد فتح المعاملة قبل تسجيل المراجعة');return}
- try{await api('/cases/'+encodeURIComponent(id)+'/review','POST',{decision,note,version:c.current_version??reviewResult(c).claim_version});await refresh();render();toast('حُفظت المراجعة، وتتم مزامنتها مع قاعدة البيانات')}catch(e){toast(e.message)}
+ const origin=typeof reviewUI!=='undefined'?reviewUI.context():null;const c=evidenceReview?.case;if(!c||c.id!==id){toast('أعد فتح المعاملة قبل تسجيل المراجعة');return}
+ try{await api('/cases/'+encodeURIComponent(id)+'/review','POST',{decision,note,version:c.current_version??reviewResult(c).claim_version});await refresh();if(origin?reviewUI.current(origin):currentId===id&&page==='results')render();toast('حُفظت المراجعة، وتتم مزامنتها مع قاعدة البيانات')}catch(e){toast(e.message)}
 };
 const reliableLoadDetail=loadDetail;let reviewSyncTimer=null;
 loadDetail=async function(id){

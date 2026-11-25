@@ -37,14 +37,15 @@ async function reanalyzeCase(event,id){
  event.preventDefault();const form=event.currentTarget,button=form.querySelector('button[type="submit"]');
  if(!evidenceReview||evidenceReview.case_id!==id||v2State?.is_current===false){toast('افتح الإصدار الحالي قبل التصحيح.');return}
  const data=new FormData(form),original=reviewResult(evidenceReview.case).extracted||evidenceReview.case.failed_fields||{},fields=Object.fromEntries([...data.entries()].filter(([key,value])=>key!=='reason'&&String(value)!==String(original[key]||'')));
- button.disabled=true;
+ button.disabled=true;const edit=form.dataset?.draftEdit,origin=typeof reviewUI!=='undefined'?reviewUI.context():null;
  try{
   await api('/cases/'+encodeURIComponent(id)+'/reanalyze','POST',{fields,note:data.get('reason'),version:evidenceReview.case.current_version},{'X-Role':'supervisor'});
-  currentId=id;await refresh();render();startPolling();toast('حُفظ التصحيح وبدأ إصدار تحليل جديد');
+  if(typeof reviewUI!=='undefined')reviewUI.saved(form,edit);await refresh();if(origin?reviewUI.current(origin):currentId===id&&page==='results')render();startPolling();toast('حُفظ التصحيح وبدأ إصدار تحليل جديد');
  }catch(e){button.disabled=false;toast(e.message)}
 }
 async function retryCase(id){
- try{await api('/cases/'+encodeURIComponent(id)+'/retry','POST',{});currentId=id;await refresh();render();startPolling();toast('بدأت إعادة المحاولة')}catch(e){toast(e.message)}
+ const origin=typeof reviewUI!=='undefined'?reviewUI.context():null;
+ try{await api('/cases/'+encodeURIComponent(id)+'/retry','POST',{});await refresh();if(origin?reviewUI.current(origin):currentId===id&&page==='results')render();startPolling();toast('بدأت إعادة المحاولة')}catch(e){toast(e.message)}
 }
 const baseBadge=badge;
 badge=function(s){if(s==='approved')return '<span class="pill done">مراجعة مسجلة</span>';if(s==='rejected')return '<span class="pill review">مراجعة غير معتمدة</span>';return s==='failed'?'<span class="pill review">تعذرت المعالجة</span>':s==='preparing'?'<span class="pill processing">استخراج المستندات</span>':baseBadge(s)};

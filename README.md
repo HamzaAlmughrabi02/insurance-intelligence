@@ -80,3 +80,7 @@ These include real HTTP tests on isolated temporary data, deterministic/adversar
 The public static demo on the main branch remains an independent simulation and does not run this local V2 pipeline.
 
 Arabic guides: [daily use](docs/V2_USER_GUIDE_AR.txt), [development study](docs/V2_DEVELOPMENT_STUDY_AR.html). The study describes the target design; the publication restrictions above reflect actual evaluation findings.
+
+## Employee interaction review
+
+A targeted [EGM review and repair pass](docs/egm/website-review-report.md) preserves the accepted layout while protecting unsaved form drafts, delayed case/report navigation, scoped save completion, keyboard focus and recoverable detail loading. Drafts are temporary page memory; refreshing the browser clears them. Run `node test_review_interactions.js` for request ordering and draft lifecycle regressions.

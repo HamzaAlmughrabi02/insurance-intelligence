@@ -61,7 +61,7 @@ loadDetail=async function(id){
   const old=evidenceReview;const result=reviewResult(c);
   evidenceReview={case_id:id,case:c,documents:c.documents||[],evidence,history,findings:collectFindings(result),selected:old?.case_id===id?old.selected:0,mode:old?.case_id===id?old.mode:'original',page:old?.case_id===id?old.page:0};
   $('detail').innerHTML=renderDetail(c);renderEvidenceWorkspace();
- }catch(e){if(request===reviewLoad&&page==='results'){$('docs').innerHTML=`<p class="notice">${esc(e.message)}</p>`;toast(e.message)}}
+ }catch(e){if(request===reviewLoad&&currentId===id&&page==='results'){const error=`<section class="notice" role="alert"><p>تعذر تحميل المعاملة. ${esc(e.message)}</p><button class="ghost" type="button" onclick="loadDetail(currentId)">إعادة تحميل المعاملة</button></section>`;if($('detail')&&!$('v2-report'))$('detail').innerHTML=error;if($('docs'))$('docs').innerHTML=error;toast(e.message)}}
 };
 function renderEvidenceWorkspace(){
  const s=evidenceReview;if(!s||!$('docs'))return;
@@ -70,7 +70,7 @@ function renderEvidenceWorkspace(){
  $('docs').innerHTML=`<div class="evidence-list">${s.documents.map((d,i)=>`<button type="button" class="document-link" aria-pressed="${i===s.selected}" onclick="selectEvidence(${i},'original')"><span dir="auto">${esc(d.original_name)}</span><small>${esc((d.original_name.split('.').pop()||'').toUpperCase())} ↗</small></button>`).join('')}</div><div class="evidence-toolbar"><div class="evidence-tabs" aria-label="طريقة عرض الدليل"><button type="button" aria-pressed="${s.mode==='original'}" onclick="selectEvidence(${s.selected},'original')">المستند الأصلي</button><button type="button" aria-pressed="${s.mode==='text'}" onclick="selectEvidence(${s.selected},'text')">النص المستخرج</button></div><select id="evidence-page" class="evidence-page-select" aria-label="صفحة المصدر" onchange="changeEvidencePage(this.value)"></select></div><div id="evidence-reader"></div><details class="review-history"><summary>سجل إصدارات التحليل (${s.history.length})</summary>${s.history.map(h=>`<p>الإصدار ${esc(h.version)} · ${esc(h.created_at)}</p>`).join('')}</details>`;
  renderEvidenceReader();
 }
-function selectEvidence(index,mode,pageIndex=0){if(!evidenceReview)return;evidenceReview.selected=index;evidenceReview.mode=mode;evidenceReview.page=pageIndex;renderEvidenceWorkspace()}
+function selectEvidence(index,mode,pageIndex=0){if(!evidenceReview)return;const active=typeof document==='undefined'?null:document.activeElement,keyboard=!!active?.closest?.('#docs');const fromMode=active?.closest?.('.evidence-tabs');evidenceReview.selected=index;evidenceReview.mode=mode;evidenceReview.page=pageIndex;renderEvidenceWorkspace();if(keyboard){const selector=fromMode?`.evidence-tabs button[aria-pressed="true"]`:`.document-link[aria-pressed="true"]`;$('docs')?.querySelector(selector)?.focus({preventScroll:true})}}
 function changeEvidencePage(value){evidenceReview.page=Number(value);renderEvidenceReader()}
 function renderEvidenceReader(){
  const s=evidenceReview,d=s.documents[s.selected],e=s.evidence.find(e=>e.document_id===d.id),pages=e?.pages||[];

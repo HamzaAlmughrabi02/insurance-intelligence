@@ -17,7 +17,7 @@ async function authRequest(path,obj){
  const data=await r.json();if(!r.ok)throw Error(authErrors[data.error]||data.error||'تعذر الاتصال');return data;
 }
 function showAccountEntry(message=''){
- connected=false;cases=[];accountSession=null;clearInterval(poller);clearInterval(servicesTimer);
+ if(typeof reviewUI!=='undefined')reviewUI.clear();connected=false;cases=[];accountSession=null;clearInterval(poller);clearInterval(servicesTimer);
  document.body.classList.add('auth-pending');
  let panel=$('account-entry');if(!panel){panel=document.createElement('main');panel.id='account-entry';document.body.append(panel)}
  const setup=setupRequired;

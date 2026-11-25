@@ -28,3 +28,4 @@ jobs:
       - run: python test_workspace.py
       - run: node test_workspace_ui.js
       - run: node test_intake_release.js
+      - run: node test_review_interactions.js
