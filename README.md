@@ -1,5 +1,7 @@
 # IntelliSure V2 · Evidence review workbench
 
+**Approved local edition:** `codex/v2-stable` · [workflow inventory and cleanup verification](docs/WORKFLOW_INVENTORY.md) · [10-minute presentation guide](docs/PRESENTATION_10_MIN_AR.html) · [Notion presentation](https://app.notion.com/p/42328640055881b68012e3e9cadf5d5f).
+
 Independent development edition for motor-claim document review. The original local application and public demo remain separate.
 
 ## What changed
@@ -49,7 +51,7 @@ Models run locally. The reader may reuse the original installation's Python OCR 
 
 ## Development and setup
 
-This branch is `codex/intellisure-v2`; do not merge it into the original deployment without a migration review. Runtime secrets, uploads, accounts, databases, backups, QA fixtures and model weights are ignored by Git.
+The approved branch is `codex/v2-stable`; `codex/intellisure-v2` is an earlier development snapshot. Do not merge it into the original deployment without a migration review. Runtime secrets, uploads, accounts, databases, backups, QA fixtures and model weights are ignored by Git.
 
 `configure_v2.py` prepares private local configuration. `prepare_v2_n8n.py` prepares five inactive workflow imports with fresh IDs and credential bindings. `deploy_local_v2.py` is a maintenance command for the existing Windows installation with its `insurance-postgres` container and n8n npm installation: it provisions only the V2 database/role, checks for active executions, backs up n8n, imports through its official CLI, publishes the V2 workflows and restarts n8n. `--report-only` and `--main-only` limit workflow updates. It is not a generic cloud installer. `compose.yaml` is a separate-container template using its own name/volume and port 5434; it is not used by the current shared-container deployment. Fresh standalone configuration uses 5434, while the already provisioned local V2 explicitly uses 5433. The local original backend/launcher must exist for that maintenance command; a standalone cloud deployment is outside this edition.
 
